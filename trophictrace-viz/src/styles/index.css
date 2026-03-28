@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "mapbox-gl/dist/mapbox-gl.css";
+@import "tailwindcss";
+
+:root {
+  /* Dark mode as default */
+  --bg-primary: #191919;
+  --bg-secondary: #232323;
+  --bg-surface: #2A2A2A;
+  --text-primary: #E8E5E0;
+  --text-secondary: #A0A0A0;
+  --text-tertiary: #6B6B6B;
+  --accent: #D4916E;
+  --accent-subtle: #2E2520;
+  --border: #333333;
+  --border-focus: #E8E5E0;
+
+  /* Data colors — slightly muted from spec originals */
+  --safe: #2EB872;
+  --limited: #E0A030;
+  --unsafe: #DC4444;
+
+  /* Typography */
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+code, .mono {
+  font-family: var(--font-mono);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* Mapbox overrides */
+.mapboxgl-ctrl-attrib {
+  opacity: 0.5;
+}

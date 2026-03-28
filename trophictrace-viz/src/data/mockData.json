@@ -1,0 +1,350 @@
+{
+  "watershed_name": "Cape Fear River, NC",
+  "metadata": {
+    "model_version": "trophictrace-pinn-v1",
+    "inference_timestamp": "2026-03-28T14:30:00Z"
+  },
+  "segments": [
+    {
+      "segment_id": "seg_001",
+      "name": "Cape Fear River — Upper Reach",
+      "lat": 35.15,
+      "lng": -78.95,
+      "water_pfas_concentration_ppt": 45.2,
+      "species": [
+        {
+          "common_name": "Bluegill",
+          "scientific_name": "Lepomis macrochirus",
+          "trophic_level": 2.8,
+          "tissue_concentration_ng_g": 3.1,
+          "safe_servings_per_month": 12,
+          "safety_status": "safe",
+          "confidence_interval": [2.1, 4.3],
+          "contributing_factors": [
+            { "factor": "Upstream discharge loading", "contribution_pct": 35.2, "type": "source" },
+            { "factor": "Low trophic level", "contribution_pct": 25.1, "type": "ecological" },
+            { "factor": "Water temperature", "contribution_pct": 18.0, "type": "environmental" },
+            { "factor": "Lipid content (2.1%)", "contribution_pct": 12.5, "type": "biological" },
+            { "factor": "Flow dilution", "contribution_pct": 9.2, "type": "hydrologic" }
+          ],
+          "accumulation_curve": {
+            "months": [0, 3, 6, 9, 12, 18, 24, 36],
+            "concentration_ng_g": [0, 0.8, 1.5, 2.2, 2.7, 3.0, 3.1, 3.1]
+          },
+          "pathway": {
+            "source_name": "Chemours Fayetteville Works",
+            "discharge_ppt": 450,
+            "water_concentration_ppt": 45.2,
+            "dilution_factor": 10.0,
+            "bcf_applied": 68,
+            "tissue_concentration_ng_g": 3.1,
+            "epa_reference_dose_ng_g": 20.0
+          }
+        },
+        {
+          "common_name": "Channel Catfish",
+          "scientific_name": "Ictalurus punctatus",
+          "trophic_level": 3.5,
+          "tissue_concentration_ng_g": 8.7,
+          "safe_servings_per_month": 4,
+          "safety_status": "limited",
+          "confidence_interval": [6.2, 11.8],
+          "contributing_factors": [
+            { "factor": "Upstream discharge loading", "contribution_pct": 40.1, "type": "source" },
+            { "factor": "Moderate trophic level (3.5)", "contribution_pct": 22.3, "type": "ecological" },
+            { "factor": "Elevated water temperature", "contribution_pct": 15.0, "type": "environmental" },
+            { "factor": "High lipid content (8.2%)", "contribution_pct": 14.8, "type": "biological" },
+            { "factor": "Low flow dilution", "contribution_pct": 7.8, "type": "hydrologic" }
+          ],
+          "accumulation_curve": {
+            "months": [0, 3, 6, 9, 12, 18, 24, 36],
+            "concentration_ng_g": [0, 2.1, 4.5, 6.3, 7.5, 8.3, 8.6, 8.7]
+          },
+          "pathway": {
+            "source_name": "Chemours Fayetteville Works",
+            "discharge_ppt": 450,
+            "water_concentration_ppt": 45.2,
+            "dilution_factor": 10.0,
+            "bcf_applied": 192,
+            "tissue_concentration_ng_g": 8.7,
+            "epa_reference_dose_ng_g": 20.0
+          }
+        }
+      ]
+    },
+    {
+      "segment_id": "seg_002",
+      "name": "Cape Fear River — Fayetteville Reach",
+      "lat": 35.0527,
+      "lng": -78.8784,
+      "water_pfas_concentration_ppt": 120.5,
+      "species": [
+        {
+          "common_name": "Largemouth Bass",
+          "scientific_name": "Micropterus salmoides",
+          "trophic_level": 4.2,
+          "tissue_concentration_ng_g": 48.3,
+          "safe_servings_per_month": 1,
+          "safety_status": "unsafe",
+          "confidence_interval": [38.5, 59.1],
+          "contributing_factors": [
+            { "factor": "Chemours Fayetteville Works discharge", "contribution_pct": 62.1, "type": "source" },
+            { "factor": "High trophic level (4.2)", "contribution_pct": 18.7, "type": "ecological" },
+            { "factor": "Elevated water temperature (24°C)", "contribution_pct": 8.4, "type": "environmental" },
+            { "factor": "High lipid content (5.8%)", "contribution_pct": 6.2, "type": "biological" },
+            { "factor": "Low flow dilution", "contribution_pct": 4.6, "type": "hydrologic" }
+          ],
+          "accumulation_curve": {
+            "months": [0, 3, 6, 9, 12, 18, 24, 36],
+            "concentration_ng_g": [0, 12.5, 24.8, 34.2, 40.1, 45.8, 47.6, 48.3]
+          },
+          "pathway": {
+            "source_name": "Chemours Fayetteville Works",
+            "discharge_ppt": 450,
+            "water_concentration_ppt": 120.5,
+            "dilution_factor": 3.7,
+            "bcf_applied": 400,
+            "tissue_concentration_ng_g": 48.3,
+            "epa_reference_dose_ng_g": 20.0
+          }
+        },
+        {
+          "common_name": "Striped Bass",
+          "scientific_name": "Morone saxatilis",
+          "trophic_level": 4.0,
+          "tissue_concentration_ng_g": 38.9,
+          "safe_servings_per_month": 1,
+          "safety_status": "unsafe",
+          "confidence_interval": [30.2, 48.6],
+          "contributing_factors": [
+            { "factor": "Chemours Fayetteville Works discharge", "contribution_pct": 58.3, "type": "source" },
+            { "factor": "High trophic level (4.0)", "contribution_pct": 20.1, "type": "ecological" },
+            { "factor": "Water temperature", "contribution_pct": 9.8, "type": "environmental" },
+            { "factor": "Lipid content (4.5%)", "contribution_pct": 7.2, "type": "biological" },
+            { "factor": "Low flow dilution", "contribution_pct": 4.6, "type": "hydrologic" }
+          ],
+          "accumulation_curve": {
+            "months": [0, 3, 6, 9, 12, 18, 24, 36],
+            "concentration_ng_g": [0, 10.2, 20.1, 28.5, 33.8, 37.2, 38.5, 38.9]
+          },
+          "pathway": {
+            "source_name": "Chemours Fayetteville Works",
+            "discharge_ppt": 450,
+            "water_concentration_ppt": 120.5,
+            "dilution_factor": 3.7,
+            "bcf_applied": 323,
+            "tissue_concentration_ng_g": 38.9,
+            "epa_reference_dose_ng_g": 20.0
+          }
+        },
+        {
+          "common_name": "Channel Catfish",
+          "scientific_name": "Ictalurus punctatus",
+          "trophic_level": 3.5,
+          "tissue_concentration_ng_g": 14.7,
+          "safe_servings_per_month": 3,
+          "safety_status": "limited",
+          "confidence_interval": [10.8, 19.2],
+          "contributing_factors": [
+            { "factor": "Chemours Fayetteville Works discharge", "contribution_pct": 52.0, "type": "source" },
+            { "factor": "Moderate trophic level (3.5)", "contribution_pct": 18.5, "type": "ecological" },
+            { "factor": "High lipid content (8.2%)", "contribution_pct": 14.3, "type": "environmental" },
+            { "factor": "Water temperature", "contribution_pct": 9.8, "type": "biological" },
+            { "factor": "Flow rate", "contribution_pct": 5.4, "type": "hydrologic" }
+          ],
+          "accumulation_curve": {
+            "months": [0, 3, 6, 9, 12, 18, 24, 36],
+            "concentration_ng_g": [0, 3.8, 7.5, 10.6, 12.8, 14.1, 14.5, 14.7]
+          },
+          "pathway": {
+            "source_name": "Chemours Fayetteville Works",
+            "discharge_ppt": 450,
+            "water_concentration_ppt": 120.5,
+            "dilution_factor": 3.7,
+            "bcf_applied": 122,
+            "tissue_concentration_ng_g": 14.7,
+            "epa_reference_dose_ng_g": 20.0
+          }
+        },
+        {
+          "common_name": "Bluegill",
+          "scientific_name": "Lepomis macrochirus",
+          "trophic_level": 2.8,
+          "tissue_concentration_ng_g": 5.2,
+          "safe_servings_per_month": 8,
+          "safety_status": "limited",
+          "confidence_interval": [3.8, 7.0],
+          "contributing_factors": [
+            { "factor": "Chemours Fayetteville Works discharge", "contribution_pct": 45.0, "type": "source" },
+            { "factor": "Low trophic level", "contribution_pct": 22.0, "type": "ecological" },
+            { "factor": "Water temperature", "contribution_pct": 15.0, "type": "environmental" },
+            { "factor": "Low lipid content (2.1%)", "contribution_pct": 10.5, "type": "biological" },
+            { "factor": "Flow dilution", "contribution_pct": 7.5, "type": "hydrologic" }
+          ],
+          "accumulation_curve": {
+            "months": [0, 3, 6, 9, 12, 18, 24, 36],
+            "concentration_ng_g": [0, 1.3, 2.6, 3.8, 4.5, 5.0, 5.1, 5.2]
+          },
+          "pathway": {
+            "source_name": "Chemours Fayetteville Works",
+            "discharge_ppt": 450,
+            "water_concentration_ppt": 120.5,
+            "dilution_factor": 3.7,
+            "bcf_applied": 43,
+            "tissue_concentration_ng_g": 5.2,
+            "epa_reference_dose_ng_g": 20.0
+          }
+        }
+      ]
+    },
+    {
+      "segment_id": "seg_003",
+      "name": "Cape Fear River — Lower Reach",
+      "lat": 34.85,
+      "lng": -78.75,
+      "water_pfas_concentration_ppt": 85.3,
+      "species": [
+        {
+          "common_name": "Largemouth Bass",
+          "scientific_name": "Micropterus salmoides",
+          "trophic_level": 4.2,
+          "tissue_concentration_ng_g": 32.1,
+          "safe_servings_per_month": 1,
+          "safety_status": "unsafe",
+          "confidence_interval": [25.0, 40.5],
+          "contributing_factors": [
+            { "factor": "Upstream discharge (diluted)", "contribution_pct": 48.5, "type": "source" },
+            { "factor": "High trophic level (4.2)", "contribution_pct": 22.3, "type": "ecological" },
+            { "factor": "Water temperature", "contribution_pct": 12.1, "type": "environmental" },
+            { "factor": "Lipid content (5.8%)", "contribution_pct": 10.8, "type": "biological" },
+            { "factor": "Higher flow dilution", "contribution_pct": 6.3, "type": "hydrologic" }
+          ],
+          "accumulation_curve": {
+            "months": [0, 3, 6, 9, 12, 18, 24, 36],
+            "concentration_ng_g": [0, 8.2, 16.5, 23.4, 27.8, 30.8, 31.7, 32.1]
+          },
+          "pathway": {
+            "source_name": "Chemours Fayetteville Works",
+            "discharge_ppt": 450,
+            "water_concentration_ppt": 85.3,
+            "dilution_factor": 5.3,
+            "bcf_applied": 376,
+            "tissue_concentration_ng_g": 32.1,
+            "epa_reference_dose_ng_g": 20.0
+          }
+        },
+        {
+          "common_name": "Bluegill",
+          "scientific_name": "Lepomis macrochirus",
+          "trophic_level": 2.8,
+          "tissue_concentration_ng_g": 3.8,
+          "safe_servings_per_month": 10,
+          "safety_status": "safe",
+          "confidence_interval": [2.5, 5.2],
+          "contributing_factors": [
+            { "factor": "Upstream discharge (diluted)", "contribution_pct": 38.0, "type": "source" },
+            { "factor": "Low trophic level", "contribution_pct": 28.0, "type": "ecological" },
+            { "factor": "Water temperature", "contribution_pct": 16.0, "type": "environmental" },
+            { "factor": "Low lipid content", "contribution_pct": 11.0, "type": "biological" },
+            { "factor": "Higher flow dilution", "contribution_pct": 7.0, "type": "hydrologic" }
+          ],
+          "accumulation_curve": {
+            "months": [0, 3, 6, 9, 12, 18, 24, 36],
+            "concentration_ng_g": [0, 1.0, 1.9, 2.7, 3.2, 3.6, 3.7, 3.8]
+          },
+          "pathway": {
+            "source_name": "Chemours Fayetteville Works",
+            "discharge_ppt": 450,
+            "water_concentration_ppt": 85.3,
+            "dilution_factor": 5.3,
+            "bcf_applied": 45,
+            "tissue_concentration_ng_g": 3.8,
+            "epa_reference_dose_ng_g": 20.0
+          }
+        }
+      ]
+    }
+  ],
+  "facilities": [
+    {
+      "facility_id": "fac_001",
+      "name": "Chemours Fayetteville Works",
+      "lat": 34.9884,
+      "lng": -78.8375,
+      "pfas_discharge_ppt": 450
+    },
+    {
+      "facility_id": "fac_002",
+      "name": "Fayetteville WWTP",
+      "lat": 35.04,
+      "lng": -78.86,
+      "pfas_discharge_ppt": 85
+    }
+  ],
+  "river_geojson": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "segment_id": "seg_001",
+          "name": "Upper Reach",
+          "water_pfas_ppt": 45.2,
+          "max_tissue_ng_g": 8.7,
+          "safety_status": "limited"
+        },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [-79.05, 35.25],
+            [-79.02, 35.22],
+            [-78.99, 35.19],
+            [-78.97, 35.16],
+            [-78.95, 35.13]
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "segment_id": "seg_002",
+          "name": "Fayetteville Reach",
+          "water_pfas_ppt": 120.5,
+          "max_tissue_ng_g": 48.3,
+          "safety_status": "unsafe"
+        },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [-78.95, 35.13],
+            [-78.93, 35.10],
+            [-78.90, 35.07],
+            [-78.88, 35.05],
+            [-78.86, 35.02],
+            [-78.84, 34.99]
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "segment_id": "seg_003",
+          "name": "Lower Reach",
+          "water_pfas_ppt": 85.3,
+          "max_tissue_ng_g": 32.1,
+          "safety_status": "unsafe"
+        },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [-78.84, 34.99],
+            [-78.82, 34.95],
+            [-78.79, 34.91],
+            [-78.77, 34.87],
+            [-78.75, 34.83]
+          ]
+        }
+      }
+    ]
+  }
+}
