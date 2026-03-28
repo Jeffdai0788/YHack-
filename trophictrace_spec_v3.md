@@ -1,455 +1,1058 @@
-# TrophicTrace — Neural PFAS Bioaccumulation Prediction & Fish Safety Advisory System
+# TrophicTrace — PFAS Bioaccumulation Prediction & Fish Safety Advisory System
 
-## Hackathon Project Specification (19 Hours, 4 People)
+## YHacks 2026 Spring — Hackathon Project Specification (16 Hours, 4 People)
 
 ---
 
 ## Abstract
 
-PFAS ("forever chemicals") contaminate the drinking water of over 100 million Americans, but the far more dangerous and understudied threat is **food-web bioaccumulation**: PFAS discharged into waterways concentrate up the food chain by 1,000–10,000x, meaning water deemed "safe" produces dangerous tissue-level exposures in fish consumed by humans. A 2023 EWG study found that eating **a single serving of freshwater fish** delivers PFAS exposure equivalent to drinking contaminated water for an entire month. The EPA's 2024 drinking water regulation explicitly states that PFAS regulation will "prevent thousands of deaths," yet fish consumption advisories remain state-level, years out of date, and blind to the environmental justice communities — subsistence fishers, disproportionately low-income, Indigenous, and Black populations — who face 3–5x higher exposure than recreational anglers.
+PFAS ("forever chemicals") contaminate waterways across America, but the real danger is invisible: factories discharge PFAS into rivers, and those chemicals don't stay in the water. They get absorbed by algae, eaten by invertebrates, eaten by small fish, eaten by large fish — and at each trophic step, the concentration multiplies. By the time a human eats a bass from that river, the PFAS level in the fish tissue can be hundreds of times higher than what's measured in the water itself. The water tests "safe." The fish are dangerous.
 
-**TrophicTrace** is the first system to predict PFAS contamination levels across an entire aquatic food web using a **physics-informed heterogeneous graph neural network (GNN)** trained on environmental, ecological, and chemical data. Rather than relying on sparse, expensive field sampling, TrophicTrace learns the relationship between industrial discharge, hydrologic transport, trophic transfer, and tissue-level bioaccumulation — then generalizes to predict contamination for unsampled species, locations, and scenarios. The system produces an **interactive geographic heatmap** showing predicted fish tissue contamination across a watershed, with species-specific consumption advisories and interpretable explanations of the contamination drivers at each point.
+A 2023 EWG study found that eating **a single serving of freshwater fish** delivers PFAS exposure equivalent to drinking contaminated water for an entire month (Barbo et al., *Environmental Research*, 2023). The median PFAS concentration in freshwater fish fillets across the US is 9,500 ng/kg — and in the Great Lakes, 11,800 ng/kg. The EPA's 2024 drinking water PFAS regulation explicitly aims to "prevent thousands of deaths," yet **fish consumption advisories remain state-level, years out of date, and blind to the populations most at risk.**
 
-The entire pipeline runs on an **ASUS supercomputer**: (1) training the heterogeneous GNN with physics-informed constraints requires GPU-accelerated constrained optimization over large multi-typed graphs, and (2) state environmental agencies and tribal nations handle legally privileged pre-enforcement data with sovereignty requirements that prohibit uploading to external cloud servers.
+Those populations are subsistence fishers — disproportionately low-income, Black, and Indigenous communities who rely on locally caught fish as a primary protein source. The EPA's default general-population fish consumption rate is 22 g/day. The EPA's own subsistence fisher rate is 142.4 g/day — **6.5× higher**. When a state agency sets a "safe" advisory based on the general population assumption, it systematically undercounts the actual exposure of the people eating the most fish. A recreational angler eating bass once a month might be fine. A subsistence fisher eating that same bass three times a week is at 2–3× the EPA safety threshold. That disparity is the core finding, and it emerges directly from the math.
 
-**The cost of inaction is staggering.** A 2025 Systemiq report found that toxic chemicals in food systems impose up to **$3 trillion annually** in preventable health costs. PFAS remediation costs $0.9–65 million per kilogram. Prediction and prevention is the only economically viable path. TrophicTrace gives every state agency and tribal environmental office the analytical capacity that currently requires a team of environmental toxicologists — delivered through a single interactive map.
+**TrophicTrace** is a three-stage computational pipeline that connects factory discharge permits to predicted fish tissue contamination to personalized human exposure risk:
 
-**Key sourced statistics for judges:**
-- 1 freshwater fish serving = 1 month of PFAS water exposure (EWG 2023)
-- PFAS bioaccumulate 600x+ in downstream biota vs. water (USGS 2025)
-- EPA 2024: PFAS regulation will "prevent thousands of deaths"
-- $3 trillion/year global cost of toxic chemicals in food (Systemiq 2025)
-- $47–75 billion/year US healthcare costs from PFAS (NRDC 2025)
-- $0.9–65M per kg PFAS remediation — prevention is the only viable path (Wisconsin DNR 2024)
-- Fish advisories are years out of date — MN updated in 2026 based on multi-year review cycles
-- Subsistence fishers face 3–5x the exposure of recreational anglers (EPA 2024/2025)
-- Tribal data sovereignty requires on-premises AI (2026 Indigenous Data Sovereignty Summit)
+1. **Stage 1 — Contamination Screening (XGBoost):** Takes publicly available tabular data — NPDES discharge permits, river flow rates, land use, upstream industrial activity — and predicts which waterway segments likely have elevated PFAS, even where no fish have been sampled. This is a standard, well-proven ML approach for tabular environmental data.
+2. **Stage 2 — Bioaccumulation Chemistry (Deterministic Model):** For flagged segments, runs published mechanistic equations (Gobas 1993; Kelly, Sun, McDougall, Sunderland & Gobas 2024) that estimate how much PFAS accumulates in fish tissue, species by species. Water concentration goes in, predicted tissue concentration comes out. No ML — just chemistry with published parameters.
+3. **Stage 3 — Human Exposure & Advisory (Hazard Quotient):** Converts tissue predictions into human exposure at different consumption rates. Computes a hazard quotient (HQ): is this person's PFAS dose above or below the EPA reference dose? Outputs a personalized fish consumption advisory.
 
----
+The visualization is an interactive map of the entire United States where a judge can click any watershed and instantly see the predicted risk, the likely source factories, which fish species are safe and which aren't, and — critically — that a recreational angler might be fine while a subsistence fisher in the same location is at 2–3× the safe limit.
 
-## The Product: What TrophicTrace Is, In Detail
+The **ASUS supercomputer** enables running this pipeline across all ~90,000 NHDPlus stream segments and ~2,600 HUC-8 watersheds in the continental US fast enough for real-time interactive queries during the demo. For production deployment, tribal nations and state agencies need on-premises compute because their pre-enforcement environmental data is legally sensitive and cannot leave sovereign infrastructure.
 
-TrophicTrace has three layers: a **trained AI model** that predicts contamination, a **visualization** that makes the predictions explorable, and an optional **chatbot** that lets non-technical users ask questions in natural language.
+**Key statistics for judges (all sourced):**
 
----
-
-### Layer 1: The Physics-Informed Heterogeneous GNN
-
-#### What problem it solves
-
-Today, if a state agency wants to know whether largemouth bass in a specific lake are safe to eat, they must physically collect fish, ship tissue samples to a lab, wait weeks for PFAS analysis, and repeat this across dozens of species and locations. This costs tens of thousands of dollars per watershed and produces a snapshot that's immediately out of date. Most watersheds have never been sampled at all.
-
-TrophicTrace replaces this with a **learned model** that takes in readily available data — what facilities discharge where, how the river network flows, what species live where and eat what, and basic water chemistry — and predicts tissue-level PFAS concentrations everywhere in the watershed, for every species, simultaneously. No lab work. No sampling. Just data and physics.
-
-#### Why a GNN is the right architecture
-
-The data is inherently a graph. A watershed is a network of interconnected entities:
-
-- **Facilities** discharge PFAS into specific **river segments**
-- **River segments** are connected by flow direction (upstream→downstream), carrying dissolved PFAS
-- **Fish species** inhabit specific segments and are connected by **trophic (feeding) relationships** — bluegill eat invertebrates, largemouth bass eat bluegill
-- **Human populations** near the river consume specific species at specific rates
-
-PFAS contamination propagates through this entire network: a factory discharges GenX → it flows downstream → algae absorb it → invertebrates eat algae and concentrate it 10x → bluegill eat invertebrates and concentrate it 100x → largemouth bass eat bluegill and concentrate it 1000x → a subsistence fisher eats bass three times a week. Each step is a message being passed along an edge of the graph. A GNN learns exactly these message-passing dynamics.
-
-#### Why "physics-informed"
-
-Pure data-driven learning would require massive labeled datasets (thousands of fish tissue samples across many watersheds) that don't exist. Instead, we encode known environmental chemistry as constraints in the training loss. These act as inductive biases that dramatically reduce the amount of training data needed:
-
-1. **Trophic monotonicity:** For bioaccumulative PFAS, concentrations MUST increase at higher trophic levels. If the model predicts that a bass (predator) has lower PFAS than a bluegill (prey it eats), that's physically impossible. We penalize this in the loss.
-
-2. **BCF bounds:** The bioconcentration factor (tissue concentration ÷ water concentration) for a given species and chemical is bounded by the chemical's octanol-water partition coefficient — a known physical property. If the model's implied BCF falls outside published ranges, we penalize it.
-
-3. **Mass conservation:** At river confluences, PFAS mass in = PFAS mass out (minus sediment deposition). The model must respect water-balance physics.
-
-These constraints mean the model can learn from far fewer labeled examples because the physics rules out most wrong answers before training even begins.
-
-#### Architecture specifics
-
-**Node types (4):**
-
-| Node Type | Count per Graph | Attributes | Meaning |
-|-----------|----------------|------------|---------|
-| Facility | 3–8 | Discharge volume, congener emission vector (6-dim: PFOA, PFOS, GenX, PFHxS, PFNA, PFDA), lat/lng | An industrial discharge source |
-| Waterbody | 20–50 | Flow rate (m³/s), pH, temperature (°C), dissolved organic carbon (mg/L), segment length (km), lat/lng | A river/stream segment |
-| Species | 30–80 (species × locations) | Trophic level, lipid content (%), body mass (g), metabolic rate, species one-hot | A fish species at a specific location |
-| Population | 2–4 | Consumption rate vector (servings/month by species), population size, subsistence flag, median income | A demographic group |
-
-**Edge types (5):**
-
-| Edge Type | Meaning | Typical Count |
-|-----------|---------|--------------|
-| Facility → Waterbody | "discharges into" | 3–8 |
-| Waterbody → Waterbody | "flows downstream to" | 20–50 |
-| Waterbody → Species | "is habitat of" | 50–150 |
-| Species → Species | "is eaten by" (trophic) | 80–200 |
-| Species → Population | "is consumed by" | 30–80 |
-
-**Model:**
-
-- **Node-type-specific encoders:** Each node type has a 2-layer MLP mapping raw features → shared hidden dimension (64 or 128).
-- **3 layers of HeteroConv** (PyTorch Geometric): each edge type gets its own convolutional operator. The trophic (species→species) edges use `GATConv` because attention weights directly give us interpretability — the model learns which prey species contribute most to each predator's contamination. All other edge types use `SAGEConv`.
-- **Prediction head:** 2-layer MLP on species node embeddings → scalar tissue concentration (ng/g).
-- **~50K–200K parameters** total. This is a small model — physics constraints do the heavy lifting.
-
-**Training:**
-
-- 8 synthetic watershed graphs for training, 2 for validation
-- Labels generated by a forward physical simulation (discharge → dilution → BCF → BMF → tissue concentration + 10–20% noise) using published EPA ECOTOX values
-- Loss = MSE + 0.1 × monotonicity penalty + 0.1 × BCF bound penalty
-- Adam optimizer, lr=1e-3, 300–500 epochs
-- Trains in <30 min on a single ASUS GPU
-
-**Inference:** For every species-at-location node in the Cape Fear River demo graph, the model outputs a predicted tissue concentration. GATConv attention weights and gradient-based feature attribution provide interpretability data.
+- 1 freshwater fish serving = 1 month of PFAS-contaminated water exposure (Barbo et al., *Environmental Research*, 2023 / EWG)
+- Median PFAS in US freshwater fish fillets: 9,500 ng/kg; Great Lakes: 11,800 ng/kg (Barbo et al., 2023)
+- EPA subsistence fisher consumption rate: 142.4 g/day vs. general population 22 g/day — a **6.5× exposure gap** (EPA *Estimated Fish Consumption Rates*, 2014)
+- EPA 2024 PFAS drinking water rule: MCLs of 4 ppt for PFOA and PFOS individually (EPA NPDWR, April 2024)
+- EPA reference dose: PFOA = 3×10⁻⁸ mg/kg/day; PFOS = 1×10⁻⁷ mg/kg/day (EPA, 2024)
+- Published bioaccumulation models reproduce observed fish tissue concentrations within a factor of 2 for >80% of species with 8+ perfluorinated carbons (Sun et al., *Environmental Science: Processes & Impacts*, 2022)
+- Kelly et al. 2024 validated aquatic/terrestrial food web bioaccumulation models show good agreement between predicted and observed BCF/BAF values across multiple PFAS congeners (*Environmental Science & Technology*, 58(40), 17828–17837)
+- Fish (Teleostei) whole-body BAFs: log BAF for PFOS = 3.49 (n=67), PFOA = 2.12 (n=42) (Burkhard, *Environmental Toxicology and Chemistry*, 2021)
+- $47–75 billion/year US healthcare costs attributable to PFAS exposure (NRDC)
+- State fish advisories take 2–4+ years to update after contamination events — people eat contaminated fish in the interim
 
 ---
 
-### Layer 2: The Interactive Visualization
+## The Market: Who Needs This and Why It Doesn't Exist Yet
 
-This is what the judges see first and what makes the project memorable. It must be beautiful, intuitive, and tell a story about environmental injustice through data. Here is exactly what every screen looks like.
+**The gap:** No tool currently connects factory discharge permits → water concentration → fish tissue prediction → personalized consumption advisory in a single pipeline. Each step is handled by different agencies using different data systems, and the connections between them are made manually — if they're made at all.
 
----
+**State environmental agencies** (50 state programs, ~$2B+ collective annual budgets for water quality): Currently conduct fish tissue sampling manually at $500–2,000 per sample. A single watershed survey costs $50K–200K and produces a snapshot that's immediately aging. Most watersheds have never been sampled. TrophicTrace provides computational screening to prioritize where to spend limited sampling budgets — targeting the 5% of watersheds most likely to have dangerous fish, rather than sampling randomly.
 
-#### Screen 1: The Main Map View (Full Screen)
+**Environmental litigation firms** (PFAS lawsuits exceeded $30B in claims by 2024): Attorneys building PFAS cases need source attribution — which factory's discharge is responsible for which downstream contamination. TrophicTrace's pipeline traces contamination from specific NPDES permits through dilution and bioaccumulation to tissue levels, providing the causal chain that litigation requires.
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  ┌─ Title Bar ────────────────────────────────────────────────────────┐  │
-│  │  🐟 TrophicTrace        Cape Fear River, NC      [EJ Overlay ◉]  │  │
-│  └────────────────────────────────────────────────────────────────────┘  │
-│                                                                          │
-│                                                                          │
-│               ⚠ Chemours                                                │
-│               Fayetteville                                               │
-│               Works                                                      │
-│                  \                                                        │
-│                   ·~·~·~~~~river segment, green/thin~~~~·~·~             │
-│                             \                                            │
-│                              ·~·~ORANGE, thicker~·~·~·~                 │
-│                                                   \                      │
-│                          [soft red glow]  ·~~RED, THICK~~·~·            │
-│                                                          \               │
-│                                    ⚠ Fayetteville        ·~~·~~·       │
-│                                      WWTP                      \         │
-│                                                                  ·~~·   │
-│                                                                   ↓     │
-│                                                              to ocean   │
-│                                                                          │
-│                                                                          │
-│  ┌─ Legend ─────────────────────────────────────────────┐                │
-│  │  Fish Tissue PFAS (ng/g):                            │                │
-│  │  ██ <5 Safe   ██ 5–20 Limited   ██ >20 Unsafe       │                │
-│  └──────────────────────────────────────────────────────┘                │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+**Tribal environmental offices** (574 federally recognized tribes, many with active environmental programs): Tribal nations manage fisheries that are central to cultural practice and food sovereignty. Their environmental monitoring data often falls under tribal data sovereignty requirements — it cannot be uploaded to cloud servers or shared with federal databases without consent. TrophicTrace running on-premises via the ASUS hardware directly addresses this requirement.
 
-**Base map:** Dark-themed Mapbox style (e.g., `mapbox://styles/mapbox/dark-v11`). The darkness makes data layers visually pop. Centered on the Cape Fear River watershed in North Carolina — roughly Fayetteville area (lat ~34.5–35.3, lng ~-79.0 to -77.9, zoom ~9–10).
-
-**River network layer:** The river is drawn as GeoJSON `LineString` features on top of the base map. Each segment is styled with two properties that encode contamination data:
-
-- **Color:** Continuous gradient based on predicted water-column PFAS concentration at that segment. Low contamination = blue-green (#22d3ee). Medium = amber (#f59e0b). High = red (#ef4444). Use Mapbox's `line-color` with `interpolate` expression on the `water_pfas_ppt` property.
-- **Width:** Segments get thicker downstream of discharge points, representing increasing contamination load. Ranges from 2px (clean headwaters) to 6px (heavily contaminated segments). Use Mapbox's `line-width` with `interpolate` expression.
-- **Glow effect:** Each river line is drawn twice — once as the colored line, and once as a wider (3x), more transparent version underneath, creating a soft neon glow effect. This makes the river visually striking on the dark background.
-
-**Heatmap layer:** A soft, translucent radial glow around each river segment, colored by the MAXIMUM predicted fish tissue concentration at that segment:
-
-- **Green (#22c55e / 10% opacity):** All species safe. Barely visible glow, 50px radius.
-- **Amber (#eab308 / 20% opacity):** Some species limited. Moderate glow, 80px radius.
-- **Red (#ef4444 / 30% opacity):** Some species unsafe. Intense glow, 120px radius.
-
-Implementation: Mapbox heatmap layer using segment centroids as points, with `heatmap-weight` driven by max tissue concentration, and `heatmap-color` using the green→amber→red ramp. Alternatively, custom Canvas overlay with radial gradients at each point.
-
-The overall visual effect: a mostly calm, blue-green watershed that transitions into angry red/orange downstream of the Chemours facility. The story of contamination spreading is told instantly by the colors.
-
-**Facility markers:** White or yellow factory/hazard icons placed at discharge facility locations. Each has a subtle CSS pulse animation (concentric rings expanding and fading). On hover, show a small tooltip with facility name and primary discharge info. These should be eye-catching — they're the villains of the story.
-
-**EJ overlay toggle:** A toggle switch in the title bar. When activated, it shows semi-transparent polygon boundaries for census tracts with high subsistence fishing rates, filled with a purple/violet tint at ~15% opacity and a dashed border. Inside each polygon, a small label shows "Subsistence fishing: 18.5% | Median income: $31,200." This layer makes the environmental justice dimension literally visible on the map.
-
-**Legend:** Bottom-left corner, compact, semi-transparent dark card. Shows the color ramp with thresholds (< 5, 5–20, > 20 ng/g) and a brief label. Should not compete with the map for attention.
+**Federal agencies** (EPA, ATSDR, USGS): The EPA's 2024 PFAS Strategic Roadmap specifically calls for tools to "better understand unique impacts on subsistence fishers." ATSDR's 2024 guidance on PFAS in fish explicitly identifies the need for predictive screening tools. TrophicTrace is that tool.
 
 ---
 
-#### Screen 2: The Hover Tooltip
+## Technical Architecture: Three Stages in Detail
 
-When the cursor hovers over any point on the river or heatmap, a tooltip appears anchored near the cursor:
+---
 
-```
-┌────────────────────────────────────────────────────┐
-│                                                    │
-│  📍 Cape Fear River — Fayetteville Reach           │
-│  Water PFAS: 120.5 ppt                             │
-│                                                    │
-│  ─────────────────────────────────────────────      │
-│                                                    │
-│  ● Largemouth Bass              48.3 ng/g          │
-│    ⚠ Max 1 serving/month                           │
-│                                     [More Details] │
-│                                                    │
-│  ● Striped Bass                 38.9 ng/g          │
-│    ⚠ Max 1 serving/month                           │
-│                                     [More Details] │
-│                                                    │
-│  ● Channel Catfish              14.7 ng/g          │
-│    ⚠ Max 3 servings/month                          │
-│                                     [More Details] │
-│                                                    │
-│  ● Bluegill                      3.1 ng/g          │
-│    ✓ Safe for regular consumption                  │
-│                                                    │
-│  ─────────────────────────────────────────────      │
-│                                                    │
-│  ┌──────────────────────────────────────────┐      │
-│  │ ⚠ EJ ALERT: Subsistence fishers here    │      │
-│  │ face 3.2× the exposure of recreational  │      │
-│  │ anglers (Fayetteville SE, median income  │      │
-│  │ $31,200, 18.5% subsistence fishing)     │      │
-│  └──────────────────────────────────────────┘      │
-│                                                    │
-└────────────────────────────────────────────────────┘
+### Stage 1: PFAS Contamination Screening Model (XGBoost)
+
+#### What it does
+
+Takes tabular environmental features for a waterway segment and outputs a predicted water-column PFAS concentration (ng/L). This is a **screening tool** — it identifies which segments likely have elevated PFAS so that Stage 2 can run bioaccumulation calculations on them.
+
+#### Why XGBoost
+
+XGBoost is the dominant algorithm for tabular environmental prediction tasks. Recent published work validates this exact approach:
+
+- Paulson et al. (2024, *Science*) used XGBoost (250 trees, interaction depth 3, learning rate 0.0505) to predict PFAS occurrence in US groundwater with strong predictive performance across principal aquifers.
+- A California groundwater study achieved AUROC of 73–100% for individual PFAS congeners using XGBoost with SMOTE oversampling on 25,000 observations across 4,200 wells.
+- FOCUS (2025, *arXiv*) demonstrated geospatial deep learning for surface water PFAS, but the tabular feature approach with random forest / XGBoost achieved comparable results with far simpler infrastructure.
+
+XGBoost is the right choice for a hackathon because: (a) it's proven for this exact problem domain, (b) it trains in minutes not hours, (c) feature importance is built in, giving us automatic source attribution, and (d) it handles mixed feature types and missing data natively.
+
+#### Feature engineering (29 features per segment)
+
+Every feature below comes from a publicly available, downloadable federal dataset. No proprietary data.
+
+**Discharge features (8 features):**
+
+| Feature | Description | Source |
+|---------|-------------|--------|
+| `upstream_npdes_count` | Number of NPDES-permitted facilities within 50 km upstream | EPA ECHO NPDES downloads |
+| `upstream_npdes_pfas_count` | Number of upstream facilities in PFAS-handling SIC/NAICS codes | EPA ECHO PFAS Analytic Tools |
+| `nearest_pfas_facility_km` | Distance to nearest known PFAS-handling facility | EPA ECHO + NHDPlus network distance |
+| `upstream_discharge_volume_m3` | Total permitted discharge volume from upstream facilities | EPA ECHO DMR data |
+| `pfas_industry_density` | Count of PFAS-sector facilities per km² in HUC-8 | EPA ECHO + WBD |
+| `afff_site_nearby` | Binary: DOD AFFF site within 20 km | DOD PFAS release data |
+| `wwtp_upstream` | Binary: municipal WWTP within 30 km upstream | EPA ECHO |
+| `landfill_upstream` | Binary: active landfill within 20 km upstream | EPA ECHO / RCRA |
+
+**Hydrologic features (7 features):**
+
+| Feature | Description | Source |
+|---------|-------------|--------|
+| `mean_annual_flow_m3s` | Mean annual flow at segment | NHDPlus V2 EROM table |
+| `low_flow_7q10_m3s` | 7-day 10-year low flow (worst-case dilution) | NHDPlus V2 / USGS streamstats |
+| `stream_order` | Strahler stream order | NHDPlus V2 |
+| `watershed_area_km2` | Total upstream drainage area | NHDPlus V2 catchment attributes |
+| `baseflow_index` | Fraction of streamflow from groundwater | NHDPlus V2 |
+| `mean_velocity_ms` | Mean flow velocity | NHDPlus V2 EROM table |
+| `huc8_code` | HUC-8 watershed identifier (categorical) | WBD |
+
+**Land use features (7 features):**
+
+| Feature | Description | Source |
+|---------|-------------|--------|
+| `pct_urban` | % urban land use in upstream catchment | NLCD 2021 |
+| `pct_agriculture` | % agricultural land use | NLCD 2021 |
+| `pct_forest` | % forested land use | NLCD 2021 |
+| `pct_impervious` | % impervious surface | NLCD 2021 |
+| `population_density` | People per km² in upstream catchment | Census ACS 2022 |
+| `airport_within_10km` | Binary: airport (AFFF risk) within 10 km | FAA airports database |
+| `fire_training_site` | Binary: fire training facility within 15 km | DOD/state PFAS lists |
+
+**Water chemistry features (5 features):**
+
+| Feature | Description | Source |
+|---------|-------------|--------|
+| `ph` | Water pH | WQP (Water Quality Portal) |
+| `temperature_c` | Water temperature | WQP |
+| `dissolved_organic_carbon_mgl` | DOC concentration | WQP |
+| `total_organic_carbon_mgl` | TOC concentration | WQP |
+| `conductivity_us_cm` | Specific conductance | WQP |
+
+**Geographic features (2 features):**
+
+| Feature | Description | Source |
+|---------|-------------|--------|
+| `latitude` | Segment centroid latitude | NHDPlus V2 |
+| `longitude` | Segment centroid longitude | NHDPlus V2 |
+
+#### Training data: where the labels come from
+
+The labels (measured PFAS water concentrations) come from three public datasets:
+
+1. **EPA UCMR 5 (Unregulated Contaminant Monitoring Rule 5):** The largest US drinking water PFAS dataset. Contains PFAS measurements from ~10,000 public water systems sampled 2023–2025. Each sample includes location and measured concentrations for 29 PFAS analytes. Download: https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule
+2. **USGS PFAS water monitoring data:** Surface water PFAS measurements from USGS monitoring stations. Available via the Water Quality Portal (https://www.waterqualitydata.us/) with characteristic name filter "Perfluoro*".
+3. **State-level PFAS monitoring:** States including NC, MI, MN, NJ, and MA have published fish tissue and water PFAS datasets. NC DEQ published extensive Cape Fear River PFAS data. MI EGLE publishes statewide PFAS data.
+
+We join these measured concentrations to the corresponding NHDPlus segments (by lat/lng snap-to-network using the NLDI API), then compute the 29 features above for each segment.
+
+**Expected training set size:** 3,000–8,000 labeled segments (water samples with known PFAS concentrations joined to NHDPlus features). This is well within the range where XGBoost excels.
+
+#### Model specification
+
+```python
+import xgboost as xgb
+
+model = xgb.XGBRegressor(
+    n_estimators=250,        # 250 trees (matches Paulson et al. 2024)
+    max_depth=3,             # interaction depth 3 (matches Paulson et al.)
+    learning_rate=0.05,      # learning rate ~0.05 (matches Paulson et al.)
+    min_child_weight=5,      # regularization
+    subsample=0.8,           # row sampling
+    colsample_bytree=0.8,    # column sampling
+    gamma=0.1,               # loss reduction threshold
+    reg_alpha=0.1,           # L1 regularization
+    reg_lambda=1.0,          # L2 regularization
+    objective='reg:squarederror',
+    tree_method='gpu_hist',  # GPU acceleration on ASUS
+    device='cuda'
+)
 ```
 
-**Design specs:**
+**Training time:** <2 minutes on ASUS GPU for 5,000 samples × 29 features × 250 trees. <10 minutes on CPU as fallback.
 
-- **Background:** Dark card (rgba(15, 15, 25, 0.92)) with `backdrop-filter: blur(12px)` and a 1px border in rgba(255,255,255,0.08). Rounded corners (12px). Subtle box-shadow.
-- **Typography:** System sans-serif or Inter. Location name in 14px semibold white. "Water PFAS" in 12px gray (#9ca3af). Species names in 13px medium white. Numbers in 13px monospace or tabular-nums.
-- **Safety dots:** Small CSS circles (8px diameter) next to each species name:
-  - Red (#ef4444) for unsafe (>20 ng/g)
-  - Amber (#eab308) for limited (5–20 ng/g)
-  - Green (#22c55e) for safe (<5 ng/g)
-- **Species sorting:** Listed worst-first (highest tissue concentration at top). This puts the most dangerous information first.
-- **"More Details" link:** Subtle text link in blue-gray (#60a5fa), right-aligned. Clicking opens the interpretability panel for that species.
-- **Advisory text:** One-line recommendation per species. Uses ⚠ for limited/unsafe, ✓ for safe.
-- **EJ alert box:** Only appears when the hovered segment overlaps or is near an EJ demographic zone. Has a distinct background (rgba(139, 92, 246, 0.15) — purple tint) with a left border accent (3px solid #8b5cf6). The content shows the exposure multiplier, community name, and key demographic stats.
-- **Positioning:** Tooltip appears offset from cursor (20px right, 10px below). If it would overflow the viewport edge, flip to the other side. Fades in with 150ms CSS transition. When cursor moves to a different segment, the content crossfades (opacity out/in, 100ms).
-- **Width:** Fixed at 340px. Height varies with number of species.
+**Output:** For every NHDPlus segment in the US (~90,000 segments), a predicted total PFAS water concentration in ng/L, plus XGBoost feature importance scores identifying the top contributing factors.
+
+**Validation:** 5-fold cross-validation. Report RMSE, MAE, R², and segment-level accuracy (% predictions within a factor of 3 of measured values).
 
 ---
 
-#### Screen 3: The Interpretability Panel ("More Details")
+### Stage 2: Bioaccumulation Chemistry Model (Deterministic)
 
-Clicking "More Details" on any species slides in a panel from the right edge:
+#### What it does
+
+Takes a predicted water PFAS concentration from Stage 1 and estimates the PFAS concentration in fish tissue (ng/g wet weight) for each species present in that waterway. This is **not machine learning** — it is a system of published chemical equations with published parameters.
+
+#### The scientific basis
+
+The model implements the aquatic food web bioaccumulation framework developed by Gobas (1993) and refined for PFAS by Sun et al. (2022) and Kelly, Sun, McDougall, Sunderland & Gobas (2024). Key validation result: **the model reproduces observed whole-body fish tissue concentrations within a factor of 2 for >80% of fish species** for the most bioaccumulative PFAS (those with 8+ perfluorinated carbons) (Sun et al., *Env. Sci.: Processes & Impacts*, 2022).
+
+#### Step 2a: Water concentration partitioning
+
+The total PFAS in water partitions between dissolved phase and particulate (DOC-bound) phase:
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                                                    ┌────────────────┤
-│                                                    │   ✕            │
-│                                                    │                │
-│      (map visible but dimmed                       │  LARGEMOUTH    │
-│       with dark scrim overlay,                     │  BASS          │
-│       ~40% opacity black)                          │  Cape Fear R.  │
-│                                                    │  — Fayetteville│
-│                                                    │                │
-│                                                    │ ┌────────────┐ │
-│                                                    │ │            │ │
-│                                                    │ │   48.3     │ │
-│                                                    │ │   ng/g     │ │
-│                                                    │ │            │ │
-│                                                    │ │  EPA limit: │ │
-│                                                    │ │  20 ng/g   │ │
-│                                                    │ │            │ │
-│                                                    │ │  2.4× OVER │ │
-│                                                    │ │   (RED)    │ │
-│                                                    │ └────────────┘ │
-│                                                    │                │
-│                                                    │ WHY IS THIS    │
-│                                                    │ FISH UNSAFE?   │
-│                                                    │                │
-│                                                    │ Chemours    ████████████  62% │
-│                                                    │ Trophic lvl █████  19%        │
-│                                                    │ Water temp  ██  8%            │
-│                                                    │ Lipid cont  ██  6%            │
-│                                                    │ Low flow    █  5%             │
-│                                                    │                │
-│                                                    │ ────────────── │
-│                                                    │                │
-│                                                    │ CONTAMINATION  │
-│                                                    │ PATHWAY        │
-│                                                    │                │
-│                                                    │ [Chemours]     │
-│                                                    │  450 ppt       │
-│                                                    │     │ ÷3.7     │
-│                                                    │     ▼ dilution │
-│                                                    │ [River Water]  │
-│                                                    │  120.5 ppt     │
-│                                                    │     │ ×400     │
-│                                                    │     ▼ BCF      │
-│                                                    │ [Fish Tissue]  │
-│                                                    │  48.3 ng/g     │
-│                                                    │     │          │
-│                                                    │     ▼          │
-│                                                    │ [Human Dose]   │
-│                                                    │                │
-│                                                    │ ────────────── │
-│                                                    │                │
-│                                                    │ WHO IS AT RISK?│
-│                                                    │                │
-│                                                    │ Recreational   │
-│                                                    │ ████░░░░░░ 0.8×│
-│                                                    │                │
-│                                                    │ Subsistence    │
-│                                                    │ ██████████████ │
-│                                                    │ ████ 2.6× !!  │
-│                                                    │        ↑       │
-│                                                    │    EPA limit   │
-│                                                    │                │
-│                                                    └────────────────┤
-└──────────────────────────────────────────────────────────────────────┘
+C_dissolved = C_water / (1 + K_DOC × [DOC])
 ```
 
-**Panel specs:**
+Where:
+- `C_water` = total water PFAS concentration (ng/L) from Stage 1
+- `K_DOC` = dissolved organic carbon partition coefficient (L/kg). Published values: PFOS = 1,100 L/kg; PFOA = 400 L/kg; GenX = 200 L/kg (Higgins & Luthy, 2006)
+- `[DOC]` = dissolved organic carbon concentration (kg/L), from Water Quality Portal data
 
-- **Width:** 420px. Slides in from the right with a 300ms ease-out CSS transition.
-- **Background:** Solid dark (#0f0f19) or matching the tooltip style (dark with subtle blur). Full viewport height, scrollable if content overflows.
-- **Close button:** Top-right ✕, clicking slides panel out and removes the map scrim.
-- **Scrim:** When panel is open, the map area gets a dark overlay (rgba(0,0,0,0.4)) to focus attention on the panel.
+Only the dissolved fraction is bioavailable for uptake by organisms.
 
-**Section A — Header & Verdict:**
+#### Step 2b: Bioconcentration — water to organism (BCF)
 
-- Species common name: 22px bold white
-- Location: 14px gray
-- **Big number display:** The predicted tissue concentration in a large (48px) bold font. Colored red/amber/green by safety status. This is the hero element — it should be the first thing the eye lands on.
-- Below it: "EPA reference dose: 20 ng/g" in 12px gray, and a multiplier badge: "2.4× OVER" in a red pill/badge, or "0.3× UNDER" in a green pill/badge.
-- Recommended servings: "Maximum 1 serving per month" in 14px with ⚠ icon.
+For each organism at the base of the food web (algae, invertebrates, forage fish):
 
-**Section B — "Why Is This Fish Unsafe?" (Contributing Factors):**
+```
+C_tissue = C_dissolved × BCF_species
+```
 
-- Section header: 14px uppercase semibold gray, with a subtle horizontal rule above.
-- **Horizontal bar chart:** 5 bars, sorted by contribution percentage (highest first). Each bar is:
-  - Color-coded by factor type:
-    - Source factors (discharge facilities): warm red/orange (#f97316)
-    - Ecological factors (trophic level, food web): blue (#3b82f6)
-    - Environmental factors (temperature, pH): teal (#14b8a6)
-    - Biological factors (lipid content, body mass): purple (#a855f7)
-    - Hydrologic factors (flow, dilution): gray (#6b7280)
-  - Labeled with factor name on the left, percentage on the right
-  - Bar width proportional to percentage
-  - Built with pure CSS (flexbox width percentages) or D3 — either works
-  - Each bar should have slightly rounded ends and a subtle hover highlight
+The bioconcentration factor (BCF) depends on the PFAS congener and the organism. Published BCF values from EPA's ECOTOX database (Burkhard 2021) and compiled field studies:
 
-**This data comes from the GNN's interpretability output:** gradient-based attribution of the species node prediction w.r.t. upstream node features, grouped and normalized by factor type.
+| PFAS Congener | Fish BCF Range (L/kg) | Log BAF Fish (mean ± SD) | Source |
+|---------------|----------------------|--------------------------|--------|
+| PFOS | 1,000 – 10,000 | 3.49 ± 0.91 (n=67) | Burkhard 2021 |
+| PFOA | 10 – 500 | 2.12 ± 0.80 (n=42) | Burkhard 2021 |
+| PFNA | 200 – 3,000 | 3.08 ± 0.75 | Burkhard 2021 |
+| PFHxS | 50 – 1,000 | 2.50 ± 0.90 | Burkhard 2021 |
+| PFDA | 500 – 5,000 | 3.30 ± 0.85 | Burkhard 2021 |
+| HFPO-DA (GenX) | 5 – 100 | 1.60 ± 0.70 | EPA 2024 |
 
-**Section C — "Contamination Pathway" (Mini-Sankey):**
+Within a species, BCF scales with protein and lipid content. Following Kelly et al. (2024), the species-specific BCF is estimated as:
 
-- A vertical flow diagram showing 4 nodes connected by lines:
-  1. **[Chemours]** — 450 ppt (discharge concentration)
-  2. **[River Water]** — 120.5 ppt (after dilution) — annotated with "÷3.7 dilution"
-  3. **[Fish Tissue]** — 48.3 ng/g (after bioconcentration) — annotated with "×400 BCF"
-  4. **[Human Dose]** — X ng/kg/day (consumption-adjusted)
-- The connecting lines get thicker at each step to visually show concentration increasing
-- Each node is a rounded rectangle with the concentration value inside
-- Annotations (dilution factor, BCF) sit next to the connecting lines
-- This is a simple custom SVG — NOT a full D3-sankey library. Just 4 boxes + 3 connecting paths with stroke-width varying.
-- Color: nodes match the safety color of that stage (green→amber→red as concentration increases)
+```
+BCF_species = D_albumin × f_albumin + D_membrane × f_membrane + D_protein × f_protein
+```
 
-**Section D — "Who Is At Risk?" (Dose Comparison):**
+Where:
+- `D_albumin`, `D_membrane`, `D_protein` = albumin-water, membrane-water, and structural protein-water distribution coefficients (congener-specific, published in Kelly et al. 2024)
+- `f_albumin`, `f_membrane`, `f_protein` = mass fractions of albumin, membrane lipids, and structural proteins in the organism (species-specific, from FishBase and published literature)
 
-- Two horizontal bars showing estimated dose for:
-  1. **Recreational angler** (assumes 1 serving/month): bar extends to 0.8× the EPA reference dose (green, stays within safe zone)
-  2. **Subsistence fisher** (assumes 8 servings/month): bar extends to 2.6× the EPA reference dose (red, extends far past the safe zone)
-- A vertical dashed line marks the EPA reference dose threshold, labeled "EPA limit"
-- The subsistence bar visually overshooting the line is the "aha moment" — it makes the EJ disparity impossible to miss
-- Below the bars, a brief text note: "Subsistence fishers in Fayetteville SE (median income $31,200) face 3.2× the exposure of recreational anglers."
+**For the hackathon, we use the simpler approach:** look up the published median BCF for each congener-species combination from Burkhard (2021), and scale by the species' lipid content relative to a reference species:
+
+```
+BCF_species_i = BCF_reference × (lipid_pct_i / lipid_pct_reference)
+```
+
+This is a standard approximation used in regulatory screening assessments.
+
+#### Step 2c: Biomagnification — prey to predator (BMF)
+
+At each trophic step, PFAS concentrations increase by a biomagnification factor (BMF):
+
+```
+C_predator = Σ (diet_fraction_j × C_prey_j × BMF_j→predator)
+```
+
+Where:
+- `diet_fraction_j` = fraction of predator's diet composed of prey species j (from FishBase diet data)
+- `C_prey_j` = tissue concentration in prey species j
+- `BMF_j→predator` = biomagnification factor for this predator-prey pair
+
+Published BMF values for PFOS in freshwater fish food webs range from 2–15 depending on trophic level difference (Kelly et al. 2024). The trophic magnification factor (TMF) provides a per-trophic-level multiplier:
+
+```
+log(C_tissue) = a + TMF × trophic_level
+```
+
+Published TMF values: PFOS TMF = 3.0–5.0; PFOA TMF = 1.0–2.0; PFNA TMF = 2.5–4.0 (Sun et al. 2022; Kelly et al. 2024).
+
+For the hackathon implementation, we use the TMF approach:
+
+```python
+def predict_tissue_concentration(C_water_dissolved, species_trophic_level,
+                                  species_lipid_pct, congener):
+    """
+    Predict fish tissue PFAS concentration using BCF + TMF approach.
+
+    Parameters:
+        C_water_dissolved: dissolved PFAS in water (ng/L)
+        species_trophic_level: trophic level from FishBase (2.0 - 4.5)
+        species_lipid_pct: lipid content (%) from FishBase
+        congener: PFAS congener name (e.g., 'PFOS', 'PFOA')
+
+    Returns:
+        C_tissue: predicted tissue concentration (ng/g wet weight)
+    """
+    # Published BCF values (median, L/kg) from Burkhard 2021
+    BCF_BASE = {
+        'PFOS': 3100,   # 10^3.49
+        'PFOA': 132,    # 10^2.12
+        'PFNA': 1200,   # 10^3.08
+        'PFHxS': 316,   # 10^2.50
+        'PFDA': 2000,   # 10^3.30
+        'GenX': 40,     # 10^1.60
+    }
+
+    # Published TMF values per trophic level
+    TMF = {
+        'PFOS': 3.5,
+        'PFOA': 1.5,
+        'PFNA': 3.0,
+        'PFHxS': 2.0,
+        'PFDA': 3.2,
+        'GenX': 1.2,
+    }
+
+    REFERENCE_LIPID_PCT = 4.0  # reference lipid content
+    REFERENCE_TROPHIC = 3.0    # reference trophic level for BCF values
+
+    # Lipid-adjusted BCF
+    bcf = BCF_BASE[congener] * (species_lipid_pct / REFERENCE_LIPID_PCT)
+
+    # Base tissue concentration from water
+    C_base = C_water_dissolved * bcf / 1000  # convert ng/L × L/kg to ng/g
+
+    # Trophic magnification: scale by TMF for trophic levels above reference
+    trophic_diff = species_trophic_level - REFERENCE_TROPHIC
+    C_tissue = C_base * (TMF[congener] ** trophic_diff)
+
+    return C_tissue
+```
+
+#### Species data: exactly 8 common US freshwater species
+
+| Common Name | Scientific Name | Trophic Level | Lipid % | Body Mass (g) | Diet Summary | Source |
+|-------------|----------------|---------------|---------|---------------|--------------|--------|
+| Largemouth Bass | *Micropterus salmoides* | 4.2 | 5.8 | 1,500 | Bluegill, shad, crayfish | FishBase |
+| Channel Catfish | *Ictalurus punctatus* | 3.8 | 4.2 | 2,000 | Invertebrates, small fish, detritus | FishBase |
+| Bluegill | *Lepomis macrochirus* | 3.1 | 3.5 | 200 | Insects, zooplankton | FishBase |
+| Striped Bass | *Morone saxatilis* | 4.5 | 6.1 | 5,000 | Shad, herring, small fish | FishBase |
+| Flathead Catfish | *Pylodictis olivaris* | 4.0 | 4.8 | 3,000 | Fish, crayfish | FishBase |
+| White Perch | *Morone americana* | 3.5 | 3.8 | 400 | Invertebrates, small fish | FishBase |
+| Common Carp | *Cyprinus carpio* | 2.9 | 5.2 | 3,000 | Detritus, invertebrates, plants | FishBase |
+| Brown Trout | *Salmo trutta* | 4.0 | 5.5 | 1,200 | Insects, small fish, crayfish | FishBase |
+
+These 8 species cover >80% of freshwater recreational and subsistence catch across the continental US. All trophic levels and lipid data are published on FishBase (https://www.fishbase.org).
 
 ---
 
-### Layer 3 (STRETCH GOAL): RAG-Based Fish Safety Chatbot
+### Stage 3: Human Exposure & Hazard Quotient
 
-A chat interface where users type questions like "How much bass from the Cape Fear is safe to eat weekly?" and get grounded answers citing state advisories and GNN predictions. Uses RAG over state fish advisories + EPA data + GNN output.
+#### What it does
 
-**Build only if core GNN + visualization are integrated by hour 15.** Fallback: 4–5 pre-canned example Q&A pairs displayed as a static showcase.
+Converts fish tissue PFAS concentrations into human exposure doses at different consumption rates, computes a hazard quotient against EPA reference doses, and generates a personalized fish consumption advisory.
+
+#### The exposure calculation
+
+```
+Dose (ng/kg/day) = (C_tissue × IR × EF) / BW
+```
+
+Where:
+- `C_tissue` = fish tissue PFAS concentration (ng/g) from Stage 2
+- `IR` = ingestion rate (g/day)
+- `EF` = exposure fraction (unitless, = 1 for daily consumption)
+- `BW` = body weight (kg), default 70 kg (EPA standard)
+
+**Ingestion rates from EPA (***Estimated Fish Consumption Rates***, 2014):**
+
+| Population | Ingestion Rate | Meals/Week Equivalent | Source |
+|------------|---------------|----------------------|--------|
+| General US population | 22 g/day | ~0.7 meals/week | EPA 2014 |
+| Recreational angler | 17 g/day (50th pctile) | ~0.5 meals/week | EPA 2014 |
+| High-end recreational | 50 g/day (90th pctile) | ~1.5 meals/week | EPA 2014 |
+| Subsistence fisher | 142.4 g/day | ~4.4 meals/week | EPA 2014 |
+| Tribal subsistence (high-end) | 389 g/day | ~12 meals/week | Columbia River tribes |
+
+(One "meal" = 227 g, per EPA default serving size for a 70 kg adult.)
+
+#### The hazard quotient
+
+```
+HQ = Dose / RfD
+```
+
+Where:
+- `Dose` = calculated daily PFAS dose (mg/kg/day)
+- `RfD` = EPA reference dose (mg/kg/day)
+
+**EPA reference doses (2024):**
+
+| PFAS | RfD (mg/kg/day) | Source |
+|------|-----------------|--------|
+| PFOA | 3.0 × 10⁻⁸ | EPA 2024 final |
+| PFOS | 1.0 × 10⁻⁷ | EPA 2024 final |
+| HFPO-DA (GenX) | 3.0 × 10⁻⁶ | EPA 2024 HA |
+| PFHxS | 2.0 × 10⁻⁵ | EPA 2024 HI NPDWR |
+| PFNA | 3.0 × 10⁻⁶ | EPA 2024 HI NPDWR |
+
+For PFAS mixtures, we compute the **Hazard Index (HI)** — the sum of individual HQs:
+
+```
+HI = Σ HQ_i = Σ (Dose_i / RfD_i)
+```
+
+**Interpretation:**
+- HI < 1.0: Exposure below EPA safety threshold. Fish consumption at this rate is considered safe.
+- HI = 1.0–2.0: Exposure at or slightly above threshold. Advisory: reduce consumption frequency.
+- HI > 2.0: Exposure significantly exceeds threshold. Advisory: do not eat, or limit to specific servings/month.
+
+#### The advisory output
+
+For each species at each location, for each consumption profile:
+
+```python
+def compute_advisory(C_tissue_by_congener, ingestion_rate_g_day, body_weight_kg=70):
+    """
+    Compute hazard index and safe servings/month.
+
+    Parameters:
+        C_tissue_by_congener: dict of {congener: concentration_ng_g}
+        ingestion_rate_g_day: consumption rate in g/day
+        body_weight_kg: body weight (default 70 kg)
+
+    Returns:
+        hazard_index: float
+        safe_servings_per_month: int
+        safety_status: 'safe' | 'limited' | 'unsafe'
+    """
+    RFD = {  # mg/kg/day
+        'PFOS': 1.0e-7,
+        'PFOA': 3.0e-8,
+        'GenX': 3.0e-6,
+        'PFHxS': 2.0e-5,
+        'PFNA': 3.0e-6,
+        'PFDA': 3.0e-6,  # conservative estimate
+    }
+
+    SERVING_G = 227  # EPA default serving size, grams
+
+    hazard_index = 0
+    for congener, C_ng_g in C_tissue_by_congener.items():
+        if congener in RFD:
+            dose_mg_kg_day = (C_ng_g * 1e-6 * ingestion_rate_g_day) / body_weight_kg
+            hazard_index += dose_mg_kg_day / RFD[congener]
+
+    # Safe servings: find max servings/month where HI <= 1.0
+    # HI scales linearly with ingestion rate
+    if hazard_index > 0:
+        safe_daily_g = ingestion_rate_g_day / hazard_index  # g/day that gives HI=1
+        safe_servings_per_month = max(0, int((safe_daily_g * 30) / SERVING_G))
+    else:
+        safe_servings_per_month = 30  # unlimited
+
+    if hazard_index < 0.5:
+        safety_status = 'safe'
+    elif hazard_index < 1.5:
+        safety_status = 'limited'
+    else:
+        safety_status = 'unsafe'
+
+    return hazard_index, safe_servings_per_month, safety_status
+```
+
+#### The core finding that emerges from the math
+
+For a segment with predicted PFOS water concentration of 50 ng/L and a largemouth bass (trophic level 4.2, lipid 5.8%):
+
+1. Dissolved PFOS ≈ 47.6 ng/L (assuming DOC = 5 mg/L)
+2. BCF (lipid-adjusted) = 3,100 × (5.8/4.0) = 4,495 L/kg
+3. Base tissue = 47.6 × 4,495 / 1,000 = 214 ng/g
+4. Trophic magnification: 214 × 3.5^(4.2 - 3.0) = 214 × 5.1 = **1,091 ng/g** in bass tissue
+
+For a **recreational angler** eating 17 g/day:
+- Dose = (1,091 × 10⁻⁶ × 17) / 70 = 2.65 × 10⁻⁴ mg/kg/day
+- HQ_PFOS = 2.65 × 10⁻⁴ / 1.0 × 10⁻⁷ = **2,650** ← even recreational anglers are at extreme risk here
+
+For a **subsistence fisher** eating 142.4 g/day:
+- Dose = (1,091 × 10⁻⁶ × 142.4) / 70 = 2.22 × 10⁻³ mg/kg/day
+- HQ_PFOS = 2.22 × 10⁻³ / 1.0 × 10⁻⁷ = **22,200** ← catastrophic exposure
+
+The disparity ratio: 22,200 / 2,650 = **8.4× higher risk for subsistence fishers** — directly proportional to the consumption rate ratio (142.4 / 17 ≈ 8.4).
+
+This isn't a model artifact. It's arithmetic. And it shows that even "moderate" PFAS water levels can produce extremely dangerous fish tissue levels through bioaccumulation. The water tests "safe." The fish are not.
 
 ---
 
-## Data Contract: The JSON Schema
+## Data Sources: Exact URLs, APIs, and Download Instructions
 
-**This is the single most important coordination artifact.** Track A (GNN) produces this JSON. Track B/C (visualization) consumes it. Everyone builds against this schema from hour 0.
+Every dataset is federal, public, and free. No API keys required except Mapbox (free tier).
+
+### 1. EPA ECHO — Industrial Discharge Permits
+
+**What:** NPDES permit data for every facility that discharges to US waterways. Includes facility name, location, SIC/NAICS codes, permitted discharge volumes, and DMR (Discharge Monitoring Report) data.
+
+**URL:** https://echo.epa.gov/tools/data-downloads
+
+**Specific downloads:**
+- NPDES facility data: `ECHO_EXPORTER.csv` (all facilities with permits)
+- PFAS-specific: https://echo.epa.gov/trends/pfas-tools → "PFAS Analytic Tools" download includes facilities in PFAS-handling industry sectors
+- DMR discharge data: https://echo.epa.gov/tools/data-downloads/icis-npdes-discharge-points-download-summary
+
+**API:** REST API at https://echo.epa.gov/tools/web-services — query by lat/lng bounding box, SIC code, or state.
+
+**Hackathon download plan:** Pre-download the ECHO_EXPORTER national file (~500MB CSV). Filter to PFAS-handling SIC codes (listed in EPA's PFAS Handling Industry Sectors XLSX). This gives ~15,000 facilities with locations and discharge data.
+
+### 2. NHDPlus V2 — River Network and Hydrology
+
+**What:** The complete US river/stream network with flow volumes, velocities, stream order, catchment boundaries, and upstream/downstream connectivity. This is the spatial backbone.
+
+**URL:** https://www.epa.gov/waterdata/get-nhdplus-national-hydrography-dataset-plus-data
+
+**Specific data:**
+- NHDPlus V2 flowlines with Value Added Attributes (VAAs): flow rate, velocity, stream order, catchment area
+- EROM (Enhanced Runoff Method) table: mean annual flow and velocity for every flowline
+- Catchment attributes: upstream drainage area, land use summaries
+- Network connectivity: upstream/downstream COMID linkages for tracing contamination flow
+
+**API:** NLDI (Network-Linked Data Index) at https://waterdata.usgs.gov/blog/nldi-intro/ — RESTful API for network navigation. Given a point, snap to nearest flowline and navigate upstream/downstream.
+
+**Hackathon download plan:** Pre-download NHDPlus V2 national seamless geodatabase (~8GB). Extract the flowline shapefile and VAA table. For the demo, we can also use the NLDI API for real-time queries.
+
+### 3. Water Quality Portal — Measured PFAS Concentrations (Training Labels)
+
+**What:** Aggregated water quality monitoring data from USGS, EPA, and state agencies. This is where the measured PFAS concentrations come from — our training labels.
+
+**URL:** https://www.waterqualitydata.us/
+
+**Query:** Characteristic name contains "Perfluoro" or "PFAS" → returns all PFAS water measurements with location, date, concentration, and lab method.
+
+**API:** REST API supports bulk download by state, HUC, date range, and characteristic name.
+
+**Hackathon download plan:** Query all PFAS results nationally. Expected: 5,000–15,000 sample records. Join to NHDPlus by snapping sample coordinates to nearest flowline COMID.
+
+### 4. UCMR 5 — Drinking Water PFAS Data
+
+**What:** EPA's Unregulated Contaminant Monitoring Rule, 5th cycle. PFAS measurements from ~10,000 public water systems, 2023–2025. The largest systematic PFAS dataset in the US.
+
+**URL:** https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule
+
+**Hackathon download plan:** Download the UCMR 5 occurrence data CSV. Join to NHDPlus by water system location coordinates. Use as additional training labels for XGBoost.
+
+### 5. NLCD 2021 — Land Use / Land Cover
+
+**What:** 30-meter resolution land use classification for the entire US. Provides upstream land use features (% urban, % agriculture, % impervious).
+
+**URL:** https://www.mrlc.gov/data
+
+**Hackathon download plan:** Pre-compute land use percentages per NHDPlus catchment using the NHDPlus catchment zonal statistics (available pre-computed in NHDPlus V2 NLCD attributes table — no GIS processing needed).
+
+### 6. Census ACS — Demographics for EJ Overlay
+
+**What:** American Community Survey demographic data at the census tract level. Provides median household income, racial composition, and population density.
+
+**URL:** https://data.census.gov/ (or use `tidycensus` API)
+
+**Hackathon download plan:** Download tract-level ACS data for median income and race for all tracts adjacent to NHDPlus flowlines. Flag tracts with median income < $35,000 and/or high minority population as potential subsistence fishing communities.
+
+### 7. FishBase — Species Data
+
+**What:** Comprehensive database of fish biology. Provides trophic levels, lipid content, diet composition, body mass, and geographic range for every freshwater species.
+
+**URL:** https://www.fishbase.org + R package `rfishbase` or Python scraping
+
+**Hackathon download plan:** Pre-extract trophic level, lipid %, body mass, and diet data for the 8 target species. This is a 30-minute manual data entry task from FishBase web pages.
+
+### 8. Mapbox — Base Map Tiles
+
+**What:** Dark-themed vector map tiles for the visualization.
+
+**URL:** https://www.mapbox.com/ — free tier allows 50,000 map loads/month (more than enough for hackathon + demo)
+
+**API key:** Sign up for free account, get token. Set as environment variable.
+
+---
+
+## The Visualization: What the Judges See
+
+The visualization is a full-screen interactive map of the United States. It tells a story in three clicks: (1) see the national risk landscape, (2) zoom into any watershed and see species-level contamination, (3) see the environmental justice disparity between recreational and subsistence fishers.
+
+---
+
+### Screen 1: National Overview Map (Full Screen)
+
+**Base map:** Mapbox dark theme (`mapbox://styles/mapbox/dark-v11`). The dark background makes data layers pop. Initial view: continental US (lat 39.8, lng -98.6, zoom 4).
+
+**HUC-8 watershed choropleth:** ~2,600 HUC-8 polygons, each colored by the maximum predicted fish tissue PFAS concentration in that watershed:
+
+- **Blue-green (#22d3ee, 15% opacity):** All species predicted safe (<5 ng/g). Most of the map is this color.
+- **Amber (#f59e0b, 30% opacity):** Some species limited (5–50 ng/g). Visible hotspots around industrial corridors.
+- **Red (#ef4444, 45% opacity):** Some species unsafe (>50 ng/g). Concentrated around known PFAS sources — Cape Fear NC, Great Lakes, Delaware River, etc.
+
+**Facility markers:** Small pulsing dots at every known PFAS-handling facility from EPA ECHO. White dots with CSS pulse animation (concentric rings expanding and fading). On hover, show facility name and PFAS industry sector.
+
+**EJ overlay toggle:** Toggle in the header bar. When activated, overlays census tracts with median income < $35,000 in purple tint (rgba(139, 92, 246, 0.15)). The visual correlation between red contamination zones and purple EJ zones IS the story.
+
+**Click interaction:** Clicking any HUC-8 polygon zooms to that watershed and loads the segment-level detail view.
+
+---
+
+### Screen 2: Watershed Detail View (Zoomed In)
+
+After clicking a HUC-8, the map zooms to show individual NHDPlus stream segments within that watershed.
+
+**River network layer:** GeoJSON LineString features for each stream segment, styled by predicted contamination:
+
+- **Color:** Continuous gradient by predicted water PFAS concentration. Blue-green (#22d3ee) → amber (#f59e0b) → red (#ef4444). Mapbox `interpolate` expression on `water_pfas_ng_l` property.
+- **Width:** 2px (clean headwaters) → 6px (contaminated segments). Scaled by contamination level.
+- **Glow effect:** Each line drawn twice — once as the colored line, once as a wider (3×), more transparent version underneath with `line-blur: 4`, creating a neon glow on the dark map.
+
+**Hover tooltip (appears on river segment hover):**
+
+```
+┌─────────────────────────────────────────────┐
+│                                             │
+│  📍 Cape Fear River — Fayetteville Reach    │
+│  Predicted Water PFAS: 120 ng/L             │
+│                                             │
+│  ─────────────────────────────────────      │
+│                                             │
+│  🔴 Largemouth Bass    48.3 ng/g            │
+│     ⚠ Max 1 serving/month                  │
+│                                             │
+│  🔴 Striped Bass       38.9 ng/g            │
+│     ⚠ Max 1 serving/month                  │
+│                                             │
+│  🟡 Channel Catfish    14.7 ng/g            │
+│     ⚠ Max 3 servings/month                 │
+│                                             │
+│  🟢 Bluegill            3.1 ng/g            │
+│     ✓ Safe for regular consumption          │
+│                                             │
+│  ─────────────────────────────────────      │
+│                                             │
+│  ┌──────────────────────────────────────┐   │
+│  │ ⚠ EJ ALERT: Subsistence fishers     │   │
+│  │ face 8.4× the exposure of           │   │
+│  │ recreational anglers at this site    │   │
+│  └──────────────────────────────────────┘   │
+│                                             │
+│                         [See Full Report →] │
+└─────────────────────────────────────────────┘
+```
+
+**Tooltip design specs:**
+- Dark glassmorphism card: rgba(15, 15, 25, 0.92), backdrop-filter: blur(12px), 1px border rgba(255,255,255,0.08), border-radius: 12px
+- Species sorted worst-first (highest tissue concentration at top)
+- Safety dots: 8px CSS circles — red (#ef4444) for >20 ng/g, amber (#eab308) for 5–20 ng/g, green (#22c55e) for <5 ng/g
+- EJ alert box: only appears when segment overlaps low-income census tract. Purple tint background (rgba(139, 92, 246, 0.15)) with left border accent (3px solid #8b5cf6)
+- Fixed width 360px, fade-in 150ms CSS transition
+
+---
+
+### Screen 3: Species Detail Panel (Click "See Full Report")
+
+Clicking opens a slide-in panel from the right (420px wide, full viewport height):
+
+**Section A — Verdict:**
+- Species name: 22px bold white
+- Big tissue concentration: 48px bold font, colored by safety status
+- EPA reference comparison: "2.4× over EPA threshold" in red badge
+- Safe servings recommendation
+
+**Section B — "Why Is This Fish Contaminated?" (Feature Attribution):**
+- Horizontal bar chart of XGBoost feature importance for this prediction
+- 5 bars sorted by contribution %, color-coded by category:
+  - Source factors (discharge facilities): orange (#f97316)
+  - Ecological factors (trophic level): blue (#3b82f6)
+  - Environmental factors (temperature, pH): teal (#14b8a6)
+  - Biological factors (lipid content): purple (#a855f7)
+  - Hydrologic factors (flow, dilution): gray (#6b7280)
+
+**Section C — "Contamination Pathway" (Vertical Flow Diagram):**
+A simple SVG showing 4 connected nodes:
+1. **[Factory Name]** → discharge concentration (ppt)
+2. **[River Water]** → predicted water concentration (ng/L) — annotated with "÷X dilution"
+3. **[Fish Tissue]** → predicted tissue concentration (ng/g) — annotated with "×Y bioaccumulation"
+4. **[Human Dose]** → dose at given consumption rate (ng/kg/day)
+
+Lines get thicker at each step. Node colors grade from green → amber → red. This is a custom SVG with 4 `<rect>` and 3 `<path>` elements — not a charting library.
+
+**Section D — "Who Is At Risk?" (The Core Disparity):**
+Two horizontal bars showing hazard quotient:
+1. **Recreational angler** (17 g/day): bar extends to show HQ (e.g., 0.8 — green, within safe zone)
+2. **Subsistence fisher** (142.4 g/day): bar extends past the EPA limit line (e.g., 6.7 — red, far into danger)
+
+A vertical dashed line marks HQ = 1.0, labeled "EPA Safety Threshold."
+
+The subsistence bar visually overshooting the line is the **punchline** of the entire project. It makes the environmental justice disparity impossible to miss.
+
+Below the bars: "Subsistence fishers face **8.4× the exposure** of recreational anglers. In this community (median income $31,200), an estimated 18.5% of households rely on locally caught fish as a primary protein source."
+
+---
+
+## Tech Stack
+
+| Component | Technology | Why |
+|-----------|-----------|-----|
+| XGBoost model | Python 3.10+, xgboost, scikit-learn, pandas, numpy | Industry standard for tabular ML, GPU support, built-in feature importance |
+| Bioaccumulation model | Python, numpy | Pure arithmetic — published equations, no libraries needed beyond numpy |
+| Data pipeline | Python, requests, geopandas, shapely | Download, join, and process federal datasets |
+| Visualization | React (Vite), Mapbox GL JS (react-map-gl), D3.js, Tailwind CSS | Best-in-class web mapping, smooth interactions, dark theme support |
+| Backend API | FastAPI (Python) | Serves precomputed results + handles real-time segment queries during demo |
+| ASUS compute | CUDA, xgboost gpu_hist, batch inference | GPU-accelerated training and national-scale inference |
+
+---
+
+## ASUS Hardware Integration
+
+The ASUS supercomputer serves three specific purposes, each demonstrated live:
+
+### 1. National-Scale XGBoost Training + Inference (Compute-Critical)
+
+**Training:** 5,000–8,000 labeled segments × 29 features × 250 trees. On ASUS GPU with `tree_method='gpu_hist'`: **<2 minutes**. On laptop CPU: 10–15 minutes. The GPU acceleration means we can iterate on features and hyperparameters during the hackathon.
+
+**Inference:** Run the trained model on all ~90,000 NHDPlus segments to produce a national contamination prediction map. On ASUS GPU: **<30 seconds** for inference + Stage 2 bioaccumulation calculations for 8 species × 6 congeners × 90,000 segments = 4.3 million tissue predictions. On laptop CPU: 15–30 minutes.
+
+**Demo impact:** A judge picks any county in America → the system returns results instantly because everything is precomputed on the ASUS. Without the ASUS, we'd need to batch-process overnight and could only demo pre-selected locations.
+
+### 2. On-Premises Data Sovereignty
+
+State environmental agencies handle pre-enforcement PFAS data that is legally privileged. Tribal nations have data sovereignty requirements under federal Indian law — environmental data collected on tribal lands cannot be uploaded to cloud servers without tribal consent.
+
+The ASUS hardware demonstrates that the entire TrophicTrace pipeline — data ingestion, model training, inference, visualization — runs on a single on-premises machine. Demo line: **"This model was trained and run entirely on this ASUS [GPU model]. No data left this machine. That's not a limitation — it's a feature for every tribal nation and state agency that needs to keep their environmental data sovereign."**
+
+### 3. Real-Time Interactive Query During Demo
+
+When a judge asks "What about the river near my hometown?" the system can compute a fresh prediction in real time because the ASUS GPU handles the full pipeline (XGBoost inference + bioaccumulation math + exposure calculation) in <1 second per watershed. On a laptop CPU, this would take 5–10 seconds — enough lag to kill demo momentum.
+
+---
+
+## Work Breakdown: 4 Tracks, 16 Hours
+
+All 4 team members are writing code for 14+ hours. Slides are assembled from screenshots in the final 90 minutes.
+
+---
+
+### TRACK A: XGBoost Model + ASUS Pipeline
+
+**Owner:** Strongest ML/Python person
+**Tools:** Python 3.10+, xgboost, scikit-learn, pandas, numpy, geopandas
+
+#### A1: Feature Engineering Pipeline (Hours 0–5)
+
+Build `feature_engineering.py`:
+
+1. Load pre-downloaded EPA ECHO facility CSV. Filter to PFAS-handling SIC codes.
+2. Load NHDPlus flowline shapefile + VAA table.
+3. For each NHDPlus segment, compute all 29 features:
+   - Snap ECHO facilities to nearest upstream segments using NHDPlus network topology
+   - Count upstream PFAS facilities, compute distances
+   - Extract flow rate, velocity, stream order from VAA table
+   - Extract land use percentages from NHDPlus NLCD attributes
+   - Join Water Quality Portal chemistry data (pH, temp, DOC) by nearest segment
+4. Output: `features_national.parquet` — 90,000 rows × 29 columns
+
+**Deliverable:** `feature_engineering.py`, `features_national.parquet`
+
+#### A2: Training Label Assembly (Hours 3–6, overlaps with A1)
+
+Build `labels.py`:
+
+1. Download PFAS measurements from Water Quality Portal API (characteristic name contains "Perfluoro")
+2. Download UCMR 5 occurrence data CSV
+3. Snap all sample locations to nearest NHDPlus COMID
+4. Aggregate: for each COMID with measurements, compute max total PFAS concentration
+5. Join to features table
+6. Output: `training_data.parquet` — ~5,000 rows with features + labels
+
+**Deliverable:** `labels.py`, `training_data.parquet`
+
+#### A3: XGBoost Training on ASUS (Hours 6–9)
+
+Build `train_xgboost.py`:
+
+1. Load `training_data.parquet`
+2. 5-fold cross-validation with hyperparameter tuning
+3. Train final model on full dataset
+4. Extract feature importance (gain-based and SHAP if time permits)
+5. Save model checkpoint + training metrics + feature importance plot
+
+ASUS execution:
+- SSH into ASUS, set up conda environment
+- `python train_xgboost.py --device cuda --n_estimators 250`
+- Record training time, hardware specs
+
+**Deliverable:** `model.json` (XGBoost checkpoint), `training_metrics.json`, `feature_importance.png`
+
+#### A4: National Inference + Bioaccumulation (Hours 9–13)
+
+Build `inference.py`:
+
+1. Load trained model + `features_national.parquet`
+2. Predict water PFAS concentration for all 90,000 segments
+3. Run Stage 2 bioaccumulation model for 8 species × 6 congeners per segment
+4. Run Stage 3 exposure calculation for recreational + subsistence profiles
+5. Compute safety status and safe servings/month for each species at each segment
+6. Output: `national_results.json` matching the visualization data schema
+
+**Deliverable:** `inference.py`, `national_results.json`
+
+---
+
+### TRACK B: Interactive Map Visualization
+
+**Owner:** Strongest React/frontend person
+**Tools:** React (Vite), Mapbox GL JS / react-map-gl, D3.js, Tailwind CSS
+
+#### B1: Project Setup + Dark Map + National Choropleth (Hours 0–4)
+
+1. `npm create vite@latest trophictrace-viz -- --template react`
+2. `npm install mapbox-gl react-map-gl d3 tailwindcss @tailwindcss/vite`
+3. Render dark Mapbox map centered on continental US
+4. Load pre-prepared HUC-8 boundary GeoJSON (available from USGS WBD download)
+5. Style HUC-8 polygons as choropleth by contamination level (from mock data initially)
+6. Add facility markers with pulse animation
+7. Add title bar: "TrophicTrace — PFAS Fish Contamination Risk Map" + EJ overlay toggle
+
+**Deliverable:** React app with national choropleth map + facility markers
+
+#### B2: Watershed Zoom + River Segments + Heatmap (Hours 4–8)
+
+1. Implement click-to-zoom on HUC-8 polygons
+2. On zoom, load NHDPlus flowline GeoJSON for that watershed
+3. Style river segments: color by predicted PFAS, width by contamination, glow effect
+4. Add heatmap layer around segments (radial gradient by max tissue concentration)
+5. Smooth zoom transition animation
+
+**Deliverable:** Zoomable map with river segment rendering
+
+#### B3: Hover Tooltips (Hours 8–12)
+
+1. Mapbox `mousemove` listener on river segments
+2. Render tooltip component with species list, safety dots, advisory text
+3. Conditional EJ alert box when hovering near low-income census tracts
+4. 150ms fade transition, viewport-aware positioning
+5. "See Full Report" click handler → sets React state for detail panel
+
+**Deliverable:** Fully working hover tooltips
+
+#### B4: Polish + Real Data Integration (Hours 13–16)
+
+1. Swap mock data for `national_results.json` from Track A
+2. Fix any rendering issues with real data ranges
+3. Implement EJ overlay toggle (census tract polygons)
+4. Add map legend (bottom-left)
+5. Final CSS polish, transitions, responsive behavior
+6. Test full interaction flow end-to-end
+
+**Deliverable:** Polished, data-connected visualization
+
+---
+
+### TRACK C: Detail Panel + Interpretability Views
+
+**Owner:** Second frontend person
+**Tools:** React, D3.js (minimal), Tailwind CSS, custom SVG
+
+#### C1: Panel Scaffold + Verdict Section (Hours 0–3)
+
+Build `<DetailPanel>` as standalone component:
+- 420px slide-in panel, dark background, close button
+- Big tissue concentration number (48px, color-coded)
+- EPA threshold comparison badge
+- Safe servings recommendation
+
+#### C2: Feature Attribution Bar Chart (Hours 3–6)
+
+- "Why Is This Fish Contaminated?" section
+- 5 horizontal bars sorted by importance, color-coded by factor type
+- Pure CSS implementation (flexbox width percentages)
+
+#### C3: Contamination Pathway SVG (Hours 6–9)
+
+- Vertical flow diagram: Factory → River Water → Fish Tissue → Human Dose
+- Custom SVG: 4 `<rect>` nodes + 3 `<path>` connections
+- Annotations for dilution factor and bioaccumulation factor
+- Line width increases at each step
+
+#### C4: Exposure Disparity Chart (Hours 9–12)
+
+- "Who Is At Risk?" section
+- Two horizontal bars: recreational vs. subsistence HQ
+- Vertical dashed line at HQ = 1.0 (EPA threshold)
+- Community-specific demographic callout text
+
+#### C5: Integration with Track B (Hours 12–15)
+
+- Merge into Track B's React app
+- Wire "See Full Report" click → panel state
+- Add dark scrim overlay when panel is open
+- Test full flow: hover → tooltip → click → panel → close
+
+---
+
+### TRACK D: Data Pipeline + Integration + Demo Prep
+
+**Owner:** Full-stack / data person
+**Tools:** Python, requests, geopandas, GeoJSON, Flask/FastAPI
+
+#### D1: Download + Preprocess Federal Datasets (Hours 0–4)
+
+This is the foundation — everything else depends on this data.
+
+1. Download EPA ECHO NPDES facility data → filter to PFAS-handling sectors → `facilities.csv`
+2. Download NHDPlus V2 national flowlines + VAA table → `flowlines.shp`, `vaa.csv`
+3. Download HUC-8 boundary GeoJSON from USGS WBD → `huc8_boundaries.geojson`
+4. Download Water Quality Portal PFAS data → `wqp_pfas.csv`
+5. Download Census ACS tract-level income + race data → `demographics.csv`
+6. Pre-extract FishBase data for 8 target species → `species.json`
+
+**Deliverable:** All raw data files, download scripts
+
+#### D2: Mock Data + GeoJSON for Track B (Hours 3–6)
+
+Build `generate_mock_data.py`:
+1. Create realistic `mock_results.json` following the exact visualization data schema
+2. Populate 3 sample watersheds (Cape Fear NC, Huron MI, Delaware NJ) with mock segment data
+3. Include mock species predictions, facility attributions, and demographic data
+4. Generate simplified HUC-8 GeoJSON for the 3 sample watersheds
+
+Hand off to Track B by hour 5 so they can build against real data shapes.
+
+**Deliverable:** `mock_results.json`, sample GeoJSON files
+
+#### D3: Backend API (Hours 6–10)
+
+Build FastAPI server:
+1. `GET /api/national` → returns HUC-8 level summary (choropleth data)
+2. `GET /api/watershed/{huc8}` → returns segment-level data for one watershed
+3. `GET /api/segment/{comid}` → returns species detail for one segment
+4. Serves precomputed results from `national_results.json`
+5. Static file serving for the React build
+
+#### D4: Integration + Demo (Hours 10–16)
+
+1. When Track A delivers `national_results.json`, validate all fields
+2. Help Track B swap mock data for real data
+3. Help Track C integrate detail panel
+4. Test full end-to-end pipeline
+5. Build 5–7 slides from screenshots (hours 14–15)
+6. Architecture diagram in Excalidraw (30 min)
+7. Record backup demo video (hour 15)
+8. Demo rehearsal (hour 15.5)
+
+---
+
+## Delivery Schedule
+
+| Hour | Track A (ML) | Track B (Map) | Track C (Panel) | Track D (Data/Integration) |
+|------|-------------|---------------|-----------------|---------------------------|
+| 0–3 | A1: Feature engineering | B1: Project setup + dark map | C1: Panel scaffold + verdict | D1: Download federal datasets |
+| 3–6 | A1/A2: Finish features + labels | B1/B2: National choropleth + zoom | C2: Feature attribution chart | D1/D2: Finish downloads + mock data → B |
+| 6–9 | A3: XGBoost training on ASUS | B2: River segments + heatmap | C3: Pathway SVG | D3: Backend API |
+| 9–12 | A4: National inference + bioaccum | B3: Hover tooltips | C4: Exposure disparity chart | D3: Finish API + start integration |
+| 12–14 | A4: Deliver `national_results.json` | B3/B4: Polish tooltips + data swap | C5: Integrate panel into Track B | D4: Validate + help integrate |
+| 14–16 | Help debug + iterate | B4: Final visual polish | C5: Fix integration issues | D4: Slides, backup video, rehearsal |
+
+---
+
+## Risk Mitigations
+
+| Risk | Probability | Mitigation |
+|------|------------|-----------|
+| Not enough labeled PFAS water data for XGBoost | Low | UCMR 5 alone has ~10,000 water systems. Combined with WQP, we'll have 3,000–8,000+ labeled segments. If still insufficient, augment with state-published datasets (NC, MI, MN). |
+| XGBoost overfits on sparse data | Medium | Built-in: L1/L2 regularization, subsample=0.8, max_depth=3. Cross-validate rigorously. Worst case: model is a useful screening tool even with moderate accuracy. |
+| NHDPlus download/processing takes too long | Medium | Pre-download before hackathon starts. National seamless geodatabase is ~8GB. Have a USB drive backup. |
+| ASUS setup / CUDA issues | Medium | Test ASUS environment day before. Fallback: CPU training (<15 min for XGBoost). CPU inference for national scale: <5 min. Demo still works. |
+| Mapbox token issues or API limits | Low | Free tier = 50K loads/month. Fallback: Leaflet + OpenStreetMap tiles (no token, slightly less pretty). |
+| Bioaccumulation model produces unrealistic values | Low | Equations are published and well-validated. Sanity check: predicted tissue concentrations should be 100–10,000× water concentrations for PFOS, 10–500× for PFOA. Flag and clamp outliers. |
+| Data format mismatch between Track A and Track B at integration | Medium | JSON schema defined below is the contract. Track D validates before handoff. Mock data uses same schema from hour 4. |
+| Demo crashes during judging | Low | Backup video recorded by hour 15. Static screenshot fallback slides. |
+| Judges ask about a location we don't have data for | Low | National-scale inference means we have predictions for every NHDPlus segment. If a specific segment has low-confidence prediction, the UI shows a confidence indicator. |
+
+---
+
+## Data Contract: JSON Schema
+
+Track A produces this. Track B/C consume it. Track D validates it.
 
 ```json
 {
-  "watershed_name": "Cape Fear River, NC",
   "metadata": {
-    "model_version": "trophictrace-gnn-v1",
-    "training_epochs": 400,
-    "training_device": "ASUS [GPU model]",
-    "inference_timestamp": "2026-03-28T14:30:00Z"
+    "model_version": "trophictrace-xgb-v1",
+    "training_samples": 5000,
+    "cv_r_squared": 0.74,
+    "inference_device": "ASUS [GPU model]",
+    "inference_timestamp": "2026-03-29T14:00:00Z",
+    "total_segments_scored": 90000,
+    "species_modeled": 8,
+    "congeners_modeled": 6
   },
+  "huc8_summary": [
+    {
+      "huc8": "03030004",
+      "name": "Cape Fear River",
+      "state": "NC",
+      "max_tissue_ng_g": 48.3,
+      "max_water_pfas_ng_l": 120.5,
+      "risk_level": "high",
+      "n_unsafe_species": 3,
+      "n_pfas_facilities": 5,
+      "centroid_lat": 35.05,
+      "centroid_lng": -78.88
+    }
+  ],
   "segments": [
     {
-      "segment_id": "seg_001",
+      "comid": 8893864,
+      "huc8": "03030004",
       "name": "Cape Fear River — Fayetteville Reach",
       "lat": 35.0527,
       "lng": -78.8784,
-      "water_pfas_concentration_ppt": 120.5,
+      "predicted_water_pfas_ng_l": 120.5,
+      "prediction_confidence": 0.82,
       "flow_rate_m3s": 45.2,
-      "ph": 7.1,
-      "temperature_c": 22.5,
+      "top_contributing_features": [
+        {"feature": "nearest_pfas_facility_km", "importance": 0.31},
+        {"feature": "upstream_npdes_pfas_count", "importance": 0.22},
+        {"feature": "low_flow_7q10_m3s", "importance": 0.14},
+        {"feature": "pct_urban", "importance": 0.09},
+        {"feature": "dissolved_organic_carbon_mgl", "importance": 0.08}
+      ],
       "species": [
         {
           "common_name": "Largemouth Bass",
           "scientific_name": "Micropterus salmoides",
           "trophic_level": 4.2,
           "lipid_content_pct": 5.8,
-          "tissue_concentration_ng_g": 48.3,
-          "safe_servings_per_month": 1,
-          "safety_status": "unsafe",
-          "contributing_factors": [
-            { "factor": "Chemours Fayetteville Works discharge", "contribution_pct": 62.1, "type": "source" },
-            { "factor": "High trophic level (4.2)", "contribution_pct": 18.7, "type": "ecological" },
-            { "factor": "Elevated water temperature (24°C)", "contribution_pct": 8.4, "type": "environmental" },
-            { "factor": "High lipid content (5.8%)", "contribution_pct": 6.2, "type": "biological" },
-            { "factor": "Low flow dilution", "contribution_pct": 4.6, "type": "hydrologic" }
-          ],
+          "tissue_pfos_ng_g": 42.1,
+          "tissue_pfoa_ng_g": 3.8,
+          "tissue_total_pfas_ng_g": 48.3,
+          "hazard_quotient_recreational": 0.8,
+          "hazard_quotient_subsistence": 6.7,
+          "safe_servings_per_month_recreational": 4,
+          "safe_servings_per_month_subsistence": 0,
+          "safety_status_recreational": "limited",
+          "safety_status_subsistence": "unsafe",
           "pathway": {
-            "source_name": "Chemours Fayetteville Works",
-            "discharge_ppt": 450,
-            "water_concentration_ppt": 120.5,
+            "source_facility": "Chemours Fayetteville Works",
+            "discharge_ng_l": 450,
             "dilution_factor": 3.7,
-            "bcf_applied": 400,
-            "tissue_concentration_ng_g": 48.3,
-            "epa_reference_dose_ng_g": 20.0,
-            "recreational_dose_ng_kg_day": 0.82,
-            "subsistence_dose_ng_kg_day": 2.63
+            "water_concentration_ng_l": 120.5,
+            "bcf_applied": 4495,
+            "tmf_applied": 5.1,
+            "tissue_concentration_ng_g": 48.3
           }
         }
-      ]
+      ],
+      "demographics": {
+        "nearest_tract_name": "Fayetteville Southeast",
+        "median_income": 31200,
+        "subsistence_fishing_estimated_pct": 18.5,
+        "exposure_multiplier_vs_recreational": 8.4
+      }
     }
   ],
   "facilities": [
     {
-      "facility_id": "fac_001",
+      "facility_id": "NCR000059",
       "name": "Chemours Fayetteville Works",
       "lat": 34.9884,
       "lng": -78.8375,
-      "pfas_discharge_ppt": 450,
-      "congener_profile": {
-        "GenX": 0.65, "PFOA": 0.15, "PFOS": 0.12,
-        "PFHxS": 0.05, "PFNA": 0.02, "PFDA": 0.01
-      }
+      "sic_code": "2869",
+      "npdes_permit": "NC0089915",
+      "pfas_sector": true,
+      "estimated_pfas_discharge_ng_l": 450
     }
   ],
-  "demographics": [
-    {
-      "area_name": "Fayetteville Southeast",
-      "center_lat": 35.03,
-      "center_lng": -78.85,
-      "boundary_coords": [[-78.90, 35.05], [-78.80, 35.05], [-78.80, 35.00], [-78.90, 35.00]],
-      "subsistence_fisher_pct": 18.5,
-      "median_income": 31200,
-      "majority_race": "Black",
-      "exposure_multiplier_vs_recreational": 3.2,
-      "population": 24500
-    }
-  ],
-  "river_geojson": {
+  "geojson_segments": {
     "type": "FeatureCollection",
     "features": [
       {
         "type": "Feature",
         "properties": {
-          "segment_id": "seg_001",
-          "water_pfas_ppt": 120.5,
+          "comid": 8893864,
+          "water_pfas_ng_l": 120.5,
           "max_tissue_ng_g": 48.3,
-          "safety_status": "unsafe"
+          "risk_level": "high"
         },
         "geometry": {
           "type": "LineString",
@@ -457,443 +1060,47 @@ A chat interface where users type questions like "How much bass from the Cape Fe
         }
       }
     ]
+  },
+  "geojson_huc8": {
+    "type": "FeatureCollection",
+    "features": []
   }
 }
 ```
 
 ---
 
-## ASUS Integration
+## Responding to Judge Questions
 
-1. **GNN Training (compute-critical).** Training involves backpropagation through 3 layers of heterogeneous message passing on graphs with ~10³–10⁴ nodes and ~10⁴ edges, with physics-informed loss terms requiring full-graph constraint evaluation each step. 300–500 epochs across 8–10 graphs. Laptop CPU = hours. ASUS GPU = <30 minutes. We show training logs/curves from the ASUS in the demo.
+**"How do you know your water predictions are accurate?"**
+We validate with 5-fold cross-validation on 5,000+ real PFAS measurements from EPA UCMR 5 and the Water Quality Portal. We report R², RMSE, and the % of predictions within a factor of 3. Published work using the same approach (XGBoost on environmental features) achieved AUROC 73–100% for PFAS prediction in groundwater (Paulson et al., *Science*, 2024).
 
-2. **On-premises inference.** Trained model runs inference on the Cape Fear River demo graph entirely on ASUS. Demonstrates full on-prem capability.
+**"How do you know the bioaccumulation model works?"**
+We use published equations from Gobas (1993) and Kelly et al. (2024). Sun et al. (2022) validated that this model framework reproduces observed fish tissue concentrations within a factor of 2 for >80% of species for long-chain PFAS. We use published BCF/BAF values from Burkhard (2021), the largest compilation of PFAS bioaccumulation data (67 measurements for PFOS alone). These are not our numbers — they're the scientific consensus.
 
-3. **Data sovereignty.** State environmental agencies handle pre-enforcement PFAS data that is legally privileged. Tribal nations have data sovereignty requirements (2026 Indigenous Data Sovereignty Summit). ASUS enables the full pipeline on sovereign infrastructure. Demo line: "This model was trained on [ASUS specs]. No data left this machine."
+**"Why not just test the fish directly?"**
+Fish tissue sampling costs $500–2,000 per sample. A single watershed survey costs $50K–200K. The US has ~2,600 HUC-8 watersheds — most have never been sampled for PFAS in fish. TrophicTrace is a screening tool that identifies the highest-risk watersheds so agencies can target their limited sampling budgets. It doesn't replace testing — it tells you where to test first.
 
----
+**"Why do subsistence fishers face higher risk?"**
+It's pure math. The EPA's general-population fish consumption rate is 22 g/day. The subsistence fisher rate is 142.4 g/day — 6.5× higher. The hazard quotient scales linearly with consumption rate. At the same tissue concentration, a person eating 6.5× more fish gets 6.5× the PFAS dose. When a state sets an advisory assuming recreational consumption, it systematically undercounts the risk to the communities eating the most fish.
 
-## Work Breakdown: 4 Parallel Technical Tracks
+**"Why do you need the ASUS hardware?"**
+Three reasons: (1) Running XGBoost inference + bioaccumulation calculations for 90,000 segments × 8 species × 6 congeners = 4.3 million predictions takes <30 seconds on GPU vs. 15–30 minutes on CPU — fast enough for real-time demo interaction. (2) Tribal nations need on-premises compute for data sovereignty. (3) State agencies handling pre-enforcement PFAS data need secure local processing. The ASUS proves the full pipeline runs without any cloud dependency.
 
-All 4 tracks are fully technical — all 4 people are writing code for 14+ hours. Slides are assembled from screenshots + talking points in the final 90 minutes. No dedicated presentation person.
-
-The tracks are designed so that **zero coordination is needed for the first 12 hours**. Each track has its own clear deliverables, and the interfaces between tracks are defined by the JSON schema above and a shared GeoJSON file.
-
----
-
-### TRACK A: GNN Model + ASUS Training Pipeline
-
-**Owner:** Strongest ML/PyTorch person
-**Tools:** Python 3.10+, PyTorch, PyTorch Geometric, NumPy, NetworkX, CUDA, matplotlib
-**Independent until:** Hour 14 (delivers `demo_data.json` to Track B)
-**Depends on:** Track D delivers Cape Fear parameters by hour 5
-
-#### A1: Synthetic Data Generator (Hours 0–4)
-
-Build `generate_data.py`.
-
-**Function 1: `generate_watershed(n_facilities, n_segments, n_species, seed)`**
-- Create facility nodes with random discharge (10–1000 ppt) and congener profiles (6-dim Dirichlet sample)
-- Create waterbody nodes as a DAG (random tree with 1–3 tributaries merging into main stem). Each segment: flow rate 0.1–100 m³/s (increasing downstream as tributaries join), pH 6.5–8.5, temp 5–30°C, DOC 1–15 mg/L
-- Connect facilities to nearest downstream segments
-- Create species with: trophic level 2.0–4.5, lipid content 1–10%, body mass 10–5000g, metabolic rate from allometric scaling
-- Place each species at 3–8 segments → creates species-at-location nodes
-- Create trophic edges: lower trophic species → higher trophic species (with some randomness)
-- Create 2–3 population groups with consumption rate vectors
-- Return as PyTorch Geometric `HeteroData`
-
-**Function 2: `simulate_forward(graph)`**
-- Propagate discharge through river DAG: concentration = (upstream_conc × upstream_flow + discharge) / total_flow
-- Water→species: tissue = water_concentration × BCF (BCF sampled from ranges based on lipid content, 100–5000)
-- Species→species (trophic): apply BMF 2–15 based on trophic level difference
-- Add 10–20% Gaussian noise
-- Store as labels on species nodes
-
-**Generate:** 8 training + 2 validation graphs (varied sizes). Also 1 Cape Fear demo graph using real parameters from Track D.
-
-**Deliverable:** `generate_data.py`, 11 `.pt` files.
-
-#### A2: GNN Architecture (Hours 4–7)
-
-Build `model.py` with `TrophicTraceGNN`:
-- 4 node-type encoders (2-layer MLPs → hidden_dim=64)
-- 3 `HeteroConv` layers: `SAGEConv` on most edge types, `GATConv` on trophic edges (for attention-based interpretability)
-- Prediction head: 2-layer MLP → scalar tissue concentration
-- ReLU activations between layers
-
-Build `loss.py` with `physics_informed_loss`:
-- MSE on observed tissue concentrations
-- Trophic monotonicity penalty: `relu(prey_concentration - predator_concentration).mean()`
-- BCF bounds penalty: penalize when implied BCF falls outside [bcf_lower, bcf_upper]
-- Total = MSE + α × monotonicity + β × BCF_bounds (α=β=0.1)
-
-**Verify:** Forward pass runs without errors on a sample graph.
-
-**Risk mitigation:** If PyG `HeteroConv` is problematic, implement manually with `torch.nn.Linear` + sparse matrix multiplication over adjacency matrices. Same math, more code.
-
-**Deliverable:** `model.py`, `loss.py`, verified forward pass.
-
-#### A3: Training on ASUS (Hours 7–11)
-
-Build `train.py`:
-- Load all training/validation graphs
-- Training loop: iterate over graphs, compute loss, backprop (Adam, lr=1e-3)
-- Log MSE, monotonicity penalty, BCF penalty every 10 epochs
-- Save best checkpoint by validation loss
-- Plot training curves → save as PNG
-
-ASUS execution:
-- SSH in, set up environment (conda + torch + pyg + CUDA)
-- Transfer data, run: `python train.py --epochs 400 --hidden 64 --device cuda`
-- Save checkpoint + curves
-- Record ASUS hardware specs (GPU model, VRAM, training time)
-
-**Deliverable:** `train.py`, `model.pt` checkpoint, `training_curves.png`, ASUS specs notes.
-
-#### A4: Inference + Interpretability (Hours 11–14)
-
-Build `inference.py`:
-1. Load model + Cape Fear demo graph
-2. Forward pass → tissue concentration predictions for all species-at-location nodes
-3. **Interpretability extraction:**
-   - GATConv attention weights from trophic edges → which prey contribute most
-   - Gradient-based source attribution: `torch.autograd.grad(prediction, facility_features)` → normalize → facility contribution percentages
-   - Group by factor type (source, ecological, environmental, biological, hydrologic) → contribution_pct per factor
-4. **Advisory computation:**
-   - Compare tissue conc to EPA reference doses (PFOS: 20 ng/g, GenX: 0.3 ng/g)
-   - Safe servings/month = `ref_dose × 70kg / (tissue_conc × 0.227kg)`
-   - Safety status: safe (<5), limited (5–20), unsafe (>20)
-   - Recreational dose: 1 serving/month. Subsistence dose: 8 servings/month.
-5. Output full JSON matching schema → `demo_data.json`
-
-**Deliverable:** `inference.py`, `demo_data.json` ready for Track B.
+**"Who would actually use this?"**
+State fish advisory programs (50 states), environmental litigation firms ($30B+ in active PFAS cases), tribal environmental offices (574 federally recognized tribes), EPA regional offices, and ATSDR public health assessments. The EPA's 2024 PFAS Strategic Roadmap and ATSDR's 2024 fish guidance both identify computational screening tools as a critical need that doesn't currently exist.
 
 ---
 
-### TRACK B: Map Visualization + Heatmap + Tooltips
-
-**Owner:** Strongest React/frontend person
-**Tools:** React (Vite), Mapbox GL JS or react-map-gl, D3.js, Tailwind CSS
-**Independent until:** Hour 14 (receives `demo_data.json` from Track A)
-**Depends on:** Track D delivers `mock_data.json` + `river.geojson` by hour 4
-
-#### B1: Project Setup + Dark Map (Hours 0–2)
-
-- `npm create vite@latest trophictrace-viz -- --template react`
-- `npm install mapbox-gl react-map-gl d3 tailwindcss @tailwindcss/vite`
-- Get free Mapbox API token
-- Render dark-themed map centered on Cape Fear River (lat 35.05, lng -78.88, zoom 9)
-- Add title bar component: "🐟 TrophicTrace" + watershed name + EJ toggle
-- Set up data loading: read from local `mock_data.json` (provided by Track D)
-- Basic project structure: `App.jsx`, `Map.jsx`, `Tooltip.jsx`, `DetailPanel.jsx`
-
-**Deliverable:** React app rendering dark Mapbox map with title bar.
-
-#### B2: River Network + Heatmap Layer (Hours 2–6)
-
-- Load `river.geojson` (from Track D) as a Mapbox source
-- Render river segments as styled lines:
-  - Color by `water_pfas_ppt` (green→amber→red gradient via Mapbox `interpolate` expression)
-  - Width by contamination level (2–6px)
-  - Glow effect: duplicate layer at 3× width, 30% opacity, with `line-blur: 4`
-- Add heatmap layer:
-  - Point source at each segment centroid
-  - Weight by `max_tissue_ng_g`
-  - Color ramp: transparent → green → amber → red
-  - Radius: 30–120px by weight
-- Add facility markers:
-  - Custom marker component at each facility lat/lng
-  - White/yellow icon with CSS pulse animation
-  - Hover → small tooltip with facility name + discharge level
-
-**Deliverable:** Map with river network, heatmap, and facility markers rendering.
-
-#### B3: Hover Tooltips (Hours 6–10)
-
-- Implement Mapbox `mousemove` listener on river/heatmap layers
-- On hover, find nearest segment (by geographic proximity to cursor)
-- Render `<Tooltip>` component:
-  - Position: offset from cursor, flip if near viewport edge
-  - Dark glassmorphism card (dark bg, backdrop-blur, subtle border)
-  - Content:
-    - Segment name + water PFAS concentration
-    - Horizontal divider
-    - Species list (sorted worst-first):
-      - Colored dot (8px CSS circle: red/amber/green)
-      - Species name + tissue concentration
-      - Advisory text (1 line)
-      - "More Details →" link (blue-gray, right-aligned)
-    - EJ alert box (conditionally rendered if near demographic zone, purple tint bg)
-  - 150ms fade transition
-  - Crossfade on segment change (no flicker)
-- Wire up "More Details" click → sets selected species in React state (panel built by Track C)
-
-**Deliverable:** Fully working hover tooltips with species safety info.
-
-#### B4: Polish + Data Swap (Hours 14–17)
-
-- Swap `mock_data.json` for `demo_data.json` from Track A
-- Fix any rendering issues from real data (different value ranges, missing fields)
-- Implement EJ overlay toggle (show/hide demographic zone polygons)
-- Add map legend component (bottom-left)
-- Smooth animations on initial load
-- Test full hover/click flow across all segments
-- Final CSS polish: shadows, transitions, spacing
-
-**Deliverable:** Polished map visualization consuming real GNN data.
-
----
-
-### TRACK C: Interpretability Panel + Detail Views + Chatbot
-
-**Owner:** Second frontend person
-**Tools:** React, D3.js (for bar chart + mini-Sankey), Tailwind CSS, (FAISS + LLM API for chatbot if time)
-**Independent until:** Hour 14 (integrates with Track B's main app)
-**Depends on:** Track D delivers `mock_data.json` by hour 4 (for sample data to build against)
-
-This track builds the "More Details" interpretability panel as a **standalone React component** that can be developed and tested independently, then dropped into Track B's app at integration time.
-
-#### C1: Panel Scaffold + Header Section (Hours 0–3)
-
-- Create standalone React development environment (can be same Vite project as Track B, or separate — merge later)
-- Build `<DetailPanel>` component that:
-  - Slides in from the right (420px wide, full height, CSS transition 300ms ease-out)
-  - Has dark background matching the tooltip style
-  - Accepts props: `species` object (from JSON schema), `onClose` callback
-  - Has a ✕ close button top-right
-- Build the **header/verdict section:**
-  - Species name (22px bold white) + location (14px gray)
-  - Big tissue concentration number (48px bold, colored by safety status)
-  - EPA reference dose comparison: "EPA limit: 20 ng/g"
-  - Multiplier badge: "2.4× OVER" in red pill, or "0.3× UNDER" in green pill
-  - Recommended servings: "⚠ Max 1 serving/month"
-- Test with hardcoded species data from `mock_data.json`
-
-**Deliverable:** `DetailPanel` component rendering the header section.
-
-#### C2: Contributing Factors Bar Chart (Hours 3–6)
-
-- Build the **"Why Is This Fish Unsafe?"** section within `DetailPanel`:
-  - Section header: "WHY IS THIS FISH UNSAFE?" in 12px uppercase tracking-wide gray
-  - 5 horizontal bars, sorted by `contribution_pct`
-  - Each bar:
-    - Left label: factor name (13px)
-    - Bar: width proportional to percentage, color by factor type:
-      - source: #f97316 (orange)
-      - ecological: #3b82f6 (blue)
-      - environmental: #14b8a6 (teal)
-      - biological: #a855f7 (purple)
-      - hydrologic: #6b7280 (gray)
-    - Right label: percentage (13px)
-    - Height: 28px per bar, 6px gap between bars
-    - Rounded ends (border-radius: 4px)
-  - Implementation: pure CSS with flexbox width percentages is simplest and most reliable. D3 is fine too but overkill for 5 bars.
-
-**Deliverable:** Bar chart section rendering in the panel.
-
-#### C3: Pathway Mini-Sankey (Hours 6–9)
-
-- Build the **"Contamination Pathway"** section:
-  - Vertical flow diagram, 4 nodes connected by lines
-  - Each node is a rounded rectangle (120px × 60px) containing:
-    - Label (e.g., "Chemours", "River Water", "Fish Tissue", "Human Dose")
-    - Value (e.g., "450 ppt", "120.5 ppt", "48.3 ng/g")
-  - Connecting lines between nodes:
-    - Width increases at each step (2px → 4px → 6px) to show concentration/bioaccumulation
-    - Arrow at the bottom of each line
-    - Annotation next to each line: "÷3.7 dilution", "×400 BCF"
-  - Node color: gradient from green (discharge, relatively "low") → amber → red (fish tissue, high)
-  - Implementation: custom SVG is cleanest. Absolutely do NOT use a full D3-sankey library for 4 nodes — it's 10x the complexity for no benefit. Just manually position 4 `<rect>` elements with `<path>` connections.
-
-**Deliverable:** Mini-Sankey SVG rendering in the panel.
-
-#### C4: Dose Comparison Section (Hours 9–12)
-
-- Build the **"Who Is At Risk?"** section:
-  - Two horizontal bars:
-    1. "Recreational angler (1 serving/mo)" → bar extends to show dose as fraction of EPA limit (e.g., 0.8×) — colored green
-    2. "Subsistence fisher (8 servings/mo)" → bar extends past the EPA limit line (e.g., 2.6×) — colored red
-  - A vertical dashed line at the 1.0× position, labeled "EPA limit"
-  - The subsistence bar overshooting this line IS the punchline. It must be visually obvious.
-  - Below the bars: text callout with community-specific info: "Subsistence fishers in Fayetteville SE (median income $31,200) face 3.2× the exposure of recreational anglers."
-  - Implementation: pure CSS or simple SVG. Two `<div>` bars with width set by JavaScript, a positioned vertical dashed line.
-
-**Deliverable:** Dose comparison section rendering in the panel.
-
-#### C5: Integration with Track B (Hours 12–14)
-
-- Merge `DetailPanel` component into Track B's React app
-- Wire up state management:
-  - Track B's tooltip "More Details" click → sets `selectedSpecies` state
-  - `selectedSpecies` !== null → render `DetailPanel` with that species data + render dark scrim over map
-  - Close button → clear `selectedSpecies`
-- Test the full flow: hover → tooltip → click More Details → panel slides in → close → back to map
-- Fix any styling conflicts between Track B's and Track C's CSS
-- Add scrim overlay on the map when panel is open (dark transparent div)
-
-**Deliverable:** Interpretability panel fully integrated into the main app.
-
-#### C6: RAG Chatbot — STRETCH (Hours 15–18, only if core is done)
-
-If the GNN + visualization pipeline is working:
-
-- **Backend:**
-  - Download 5–10 state fish advisories (NC, MN, MI — PDF, easily available online)
-  - Convert to text, chunk into ~500-token passages
-  - Embed with any available model → store in FAISS (pip install faiss-cpu)
-  - Build query endpoint: question → retrieve top 5 chunks → prompt LLM with system: "You are a fish safety advisor. Use ONLY the provided context. Cite sources. If unsure, say so."
-  - Also include `demo_data.json` converted to natural-language sentences as part of the corpus (so the chatbot can answer about TrophicTrace's predictions)
-
-- **Frontend:**
-  - Floating chat bubble in bottom-right corner of the visualization
-  - Click to expand into chat panel (300px wide, 400px tall)
-  - Simple message list + input field
-  - User types → send to backend → stream response
-
-- **Fallback (if no time for RAG):**
-  - Pre-generate answers for 4–5 showcase questions
-  - Display as a static "Example Queries" panel
-
-**Deliverable:** Working chatbot OR static Q&A showcase.
-
----
-
-### TRACK D: Data Pipeline, GeoJSON, Mock Data, & Integration Server
-
-**Owner:** Full-stack / data person
-**Tools:** Python, requests, JSON, GeoJSON tools (geojson.io), Flask or http.server
-**Independent until:** Delivers to other tracks on a rolling basis (see schedule below)
-**Depends on:** Nothing — this track has no upstream dependencies.
-
-This person is the foundation — they produce the data artifacts that every other track needs, then become the integrator who stitches everything together.
-
-#### D1: Cape Fear River GeoJSON (Hours 0–3) — DELIVERS TO TRACK B BY HOUR 3
-
-This is the FIRST priority because Track B needs it to start rendering the map.
-
-- Go to [geojson.io](http://geojson.io) or use USGS NHDPlus data
-- Trace 20–30 segments of the Cape Fear River and major tributaries:
-  - Main stem from ~Lillington down to ~Elizabethtown (where contamination is worst)
-  - Key tributaries: Deep River, Haw River, South River
-  - Each segment = a GeoJSON `LineString` feature with 10–20 coordinate pairs
-- Add properties to each feature: `segment_id`, `name` (human-readable), centroid `lat`/`lng`
-- Also create simplified demographic zone boundaries: 3–4 polygons (simple rectangles or 4–6 vertex shapes) for census tracts near the river, with properties: `area_name`, `center_lat`, `center_lng`
-
-**Deliverable:** `river.geojson`, `demographics.geojson` → hand off to Track B.
-
-#### D2: Cape Fear Research Data (Hours 0–4) — DELIVERS TO TRACK A BY HOUR 5
-
-Compile the Cape Fear-specific data that Track A needs to build the realistic demo graph:
-
-**Facilities** → `facilities.json`:
-| Facility | Lat | Lng | Discharge (ppt) | Primary Congener | Source |
-|----------|-----|-----|-----------------|-----------------|--------|
-| Chemours Fayetteville Works | 34.9884 | -78.8375 | ~450 GenX | GenX (65%), PFOA (15%), PFOS (12%) | EPA ECHO + news |
-| Fayetteville WWTP | ~35.05 | ~-78.88 | ~50 mixed | PFOS (40%), PFOA (30%) | Estimate from similar facilities |
-| Fort Liberty (AFFF) | ~35.14 | ~-79.00 | ~100 PFOS | PFOS (70%), PFHxS (20%) | DoD PFAS reports |
-
-**Species** → `species.json`:
-| Species | Trophic Level | Lipid % | Body Mass (g) | Diet (eats what) | Source |
-|---------|--------------|---------|--------------|-------------------|--------|
-| Largemouth Bass | 4.2 | 5.8 | 1500 | Bluegill, Shad | FishBase |
-| Channel Catfish | 3.8 | 4.2 | 2000 | Invertebrates, small fish | FishBase |
-| Bluegill | 3.1 | 3.5 | 200 | Invertebrates | FishBase |
-| Striped Bass | 4.5 | 6.1 | 5000 | Shad, small fish | FishBase |
-| Flathead Catfish | 4.0 | 4.8 | 3000 | Other catfish, crayfish | FishBase |
-| White Perch | 3.5 | 3.8 | 400 | Invertebrates, small fish | FishBase |
-| American Shad | 2.8 | 5.0 | 1500 | Plankton | FishBase |
-| Blue Crab | 2.5 | 1.5 | 300 | Detritus, small organisms | FishBase |
-
-(Look up real values from fishbase.org — the above are approximate.)
-
-**River segments** → `segments.json`:
-- For each of the 20–30 GeoJSON segments: segment_id, approximate flow rate (use USGS gauge data or estimate: 20–100 m³/s on main stem, 5–20 on tributaries), pH (~7.0), temperature (~22°C summer), DOC (~5 mg/L)
-
-**Demographics** → `demographics.json`:
-- 3 zones near the river: Fayetteville SE (low-income, predominantly Black, high subsistence fishing), Fayetteville central (moderate income, mixed), rural Bladen County (low-income, mixed, high subsistence fishing)
-- Use Census ACS for median income, racial composition. Subsistence fishing rates: estimate 15–25% for low-income tracts near river (based on EPA subsistence consumption study ranges)
-
-**Deliverable:** `facilities.json`, `species.json`, `segments.json`, `demographics.json` → hand off to Track A.
-
-#### D3: Mock Data for Track B (Hours 3–5) — DELIVERS TO TRACK B BY HOUR 5
-
-Build `generate_mock_data.py` that creates a realistic `mock_data.json` following the JSON schema exactly:
-
-- Use the Cape Fear GeoJSON segment coordinates for lat/lng
-- Populate 20–25 segments with 4–8 species each
-- Tissue concentrations: higher near Chemours (30–80 ng/g for top predators), lower upstream (1–10 ng/g)
-- Contributing factors: Chemours dominant (50–70%) for segments near the facility, dilution dominant for far-downstream segments
-- Pathway data with realistic numbers (discharge → dilution → BCF → tissue → dose)
-- 3 facility entries, 3 demographic zones
-- Safety statuses computed correctly from tissue concentrations
-
-This mock data lets Track B develop the entire visualization without waiting for the GNN.
-
-**Deliverable:** `mock_data.json` → hand off to Track B.
-
-#### D4: Integration Server + End-to-End Testing (Hours 10–14)
-
-- Build a simple serving setup:
-  - Option A (simplest): Track B builds the React app → `npm run build` → serve the `dist/` folder + `demo_data.json` from a Python `http.server`. One command: `python -m http.server 8000 --directory dist/`
-  - Option B (if chatbot exists): Flask app that serves the React build, the data JSON, and the chatbot API endpoint
-- Write an integration validation script: load `demo_data.json`, check all required fields exist, check value ranges are reasonable, check all segment_ids in river_geojson have matching entries in segments array
-- When Track A delivers `demo_data.json` (hour 14), validate it and hand to Track B
-
-**Deliverable:** Serving setup, validation script.
-
-#### D5: Final Integration + Demo Coordination (Hours 14–18)
-
-- Receive `demo_data.json` from Track A
-- Run validation script
-- Hand validated JSON to Track B
-- Help Track B/C debug any integration issues
-- Test full pipeline: map loads → hover works → tooltips show real data → More Details opens with real interpretability data → EJ overlay works
-- Build 5–7 slides from screenshots (minimal: hook stat, architecture diagram, live demo, impact numbers, ASUS)
-- Architecture diagram: draw in Excalidraw or draw.io in 30 minutes (pipeline from data sources → graph → GNN on ASUS → heatmap)
-- Record backup demo screencast in case of tech failure
-- Coordinate demo rehearsal
-
-**Deliverable:** Working end-to-end system, slides, backup video.
-
----
-
-## Delivery Schedule
-
-| Hour | Track A (GNN) | Track B (Map/Heatmap) | Track C (Detail Panel) | Track D (Data/Integration) |
-|------|--------------|----------------------|----------------------|---------------------------|
-| 0–3 | A1: Synthetic data gen | B1: Project setup + dark map | C1: Panel scaffold + header | **D1: GeoJSON → delivers to B** |
-| 3–5 | A1: Finish data gen | B2: River + heatmap (uses D1 GeoJSON) | C2: Contributing factors chart | **D2: Cape Fear data → delivers to A** |
-| 5–7 | A2: GNN architecture | B2: Finish river + heatmap | C2–C3: Finish chart, start Sankey | **D3: Mock data → delivers to B** |
-| 7–10 | A3: Training on ASUS | B3: Hover tooltips | C3: Pathway mini-Sankey | D3: Finish mock data + start integration prep |
-| 10–12 | A3: Finish training | B3: Finish tooltips | C4: Dose comparison section | D4: Integration server + validation |
-| 12–14 | **A4: Inference → delivers `demo_data.json`** | B3: Polish tooltips | **C5: Integrate panel into Track B app** | D4: Validate + coordinate |
-| 14–16 | A4: Fix any issues | **B4: Swap to real data, fix issues** | C5: Fix integration issues | **D5: End-to-end testing** |
-| 16–18 | Help debug | B4: Final visual polish | C6: Chatbot (STRETCH) or polish | D5: Slides, backup video, rehearsal |
-| 18–19 | All together: final demo rehearsal, last-minute fixes |
-
----
-
-## Risk Mitigations
-
-| Risk | Mitigation |
-|------|-----------|
-| GNN doesn't converge | Synthetic data is generated FROM the physical model — the GNN recovers a known function. Fallback: use forward model directly for predictions, present GNN as "in training." |
-| ASUS setup takes too long | Local GPU fallback. Worst case: CPU with fewer epochs + smaller graphs. Demo only needs plausible predictions. |
-| PyG `HeteroConv` is buggy | Manual implementation: `torch.nn.Linear` + sparse matmul over adjacency matrices. Same math, more boilerplate. |
-| Mapbox token issues | Free tier is fine. Fallback: Leaflet with OpenStreetMap tiles (no token needed, less pretty). |
-| Data format mismatch at integration | JSON schema defined above is the contract. Track D validates before handing off. Mock data built from same schema ensures compatibility. |
-| Interpretability panel doesn't integrate cleanly | Track C builds as a standalone React component with clean props interface. Worst case: open in a modal instead of slide-in panel. |
-| Cape Fear data is hard to find | Only approximate numbers needed. Chemours contamination is extensively documented in news. Anything missing → realistic synthetic values. |
-| Chatbot runs out of time | Explicit stretch goal. Demo works without it. |
-| Demo crashes | Backup video recorded by hour 17. |
-
----
-
-## Quick Reference
-
-| Track | Owner | Core Output | Delivers To | Receives From |
-|-------|-------|-------------|-------------|---------------|
-| A | ML Engineer | Trained GNN + `demo_data.json` | B (JSON, hr 14) | D (Cape Fear data, hr 5) |
-| B | Frontend #1 | Map + heatmap + tooltips | Demo | D (GeoJSON hr 3, mock data hr 5), A (real data hr 14), C (panel hr 14) |
-| C | Frontend #2 | Interpretability panel + (chatbot) | B (component, hr 14) | D (mock data hr 5) |
-| D | Data/Integration | GeoJSON, mock data, Cape Fear dataset, integration | A (data hr 5), B (GeoJSON hr 3, mock hr 5), all (integration hr 14+) |
+## References
+
+1. Barbo, N., et al. "Locally caught freshwater fish across the United States are likely a significant source of exposure to PFOS and other perfluorinated compounds." *Environmental Research*, 2023, 220, 115165. (EWG study: 1 fish serving = 1 month PFAS water exposure)
+2. Sun, J.M., et al. "A food web bioaccumulation model for the accumulation of per- and polyfluoroalkyl substances (PFAS) in fish: how important is renal elimination?" *Environmental Science: Processes & Impacts*, 2022, 24, 1152–1164. (Model accuracy: within factor of 2 for >80% of species)
+3. Kelly, B.C., Sun, J.M., McDougall, M.R.R., Sunderland, E.M. & Gobas, F.A.P.C. "Development and Evaluation of Aquatic and Terrestrial Food Web Bioaccumulation Models for Per- and Polyfluoroalkyl Substances." *Environmental Science & Technology*, 2024, 58(40), 17828–17837.
+4. Burkhard, L.P. "Evaluation of Published Bioconcentration Factor (BCF) and Bioaccumulation Factor (BAF) Data for Per- and Polyfluoroalkyl Substances Across Aquatic Species." *Environmental Toxicology and Chemistry*, 2021, 40(6), 1530–1543.
+5. Paulson, K.D., et al. "Predictions of groundwater PFAS occurrence at drinking water supply depths in the United States." *Science*, 2024.
+6. Gobas, F.A.P.C. "A model for predicting the bioaccumulation of hydrophobic organic chemicals in aquatic food-webs: application to Lake Ontario." *Ecological Modelling*, 1993, 69, 1–17.
+7. EPA. "Estimated Fish Consumption Rates for the U.S. Population and Selected Subpopulations." 2014.
+8. EPA. "Per- and Polyfluoroalkyl Substances (PFAS) National Primary Drinking Water Regulation." Federal Register, April 2024.
+9. Systemiq. "Invisible Ingredients: The Hidden Toxic Chemicals in Our Food System." 2025.
+10. ATSDR. "Guidance for Assessment of Per- and Polyfluoroalkyl Substances (PFAS) in Fish." 2024.
