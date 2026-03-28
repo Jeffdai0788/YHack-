@@ -7,6 +7,24 @@ const STATUS_COLORS = {
   unsafe: '#DC4444',
 }
 
+const FEATURE_LABELS = {
+  nearest_pfas_facility_km: 'Proximity to PFAS facility',
+  upstream_npdes_pfas_count: 'Upstream PFAS dischargers',
+  low_flow_7q10_m3s: 'Low-flow conditions',
+  pct_urban: 'Urban land use',
+  dissolved_organic_carbon_mgl: 'Dissolved organic carbon',
+  mean_annual_flow_m3s: 'River flow rate',
+}
+
+const FEATURE_TYPES = {
+  nearest_pfas_facility_km: 'source',
+  upstream_npdes_pfas_count: 'source',
+  low_flow_7q10_m3s: 'hydrologic',
+  pct_urban: 'environmental',
+  dissolved_organic_carbon_mgl: 'environmental',
+  mean_annual_flow_m3s: 'hydrologic',
+}
+
 const FACTOR_COLORS = {
   source: '#E8845A',
   ecological: '#5B8FD4',
@@ -15,11 +33,10 @@ const FACTOR_COLORS = {
   hydrologic: '#7A7A7A',
 }
 
-export default function DetailPanel({ species, onClose }) {
+export default function DetailPanel({ species, segment, onClose }) {
   const panelRef = useRef(null)
 
   useEffect(() => {
-    // Slide-in animation
     if (panelRef.current) {
       panelRef.current.style.transform = 'translateX(100%)'
       requestAnimationFrame(() => {
@@ -28,10 +45,12 @@ export default function DetailPanel({ species, onClose }) {
     }
   }, [])
 
-  const statusColor = STATUS_COLORS[species.safety_status]
-  const epaLimit = species.pathway?.epa_reference_dose_ng_g || 20
-  const multiplier = (species.tissue_concentration_ng_g / epaLimit).toFixed(1)
-  const isOver = species.tissue_concentration_ng_g > epaLimit
+  const statusColor = STATUS_COLORS[species.safety_status_recreational]
+  const tissueConc = species.tissue_total_pfas_ng_g
+  // Use a reasonable EPA screening value for total PFAS in tissue
+  const epaLimit = 6
+  const multiplier = (tissueConc / epaLimit).toFixed(1)
+  const isOver = tissueConc > epaLimit
 
   return (
     <>
@@ -94,23 +113,10 @@ export default function DetailPanel({ species, onClose }) {
           >
             {species.common_name}
           </h2>
-          <p
-            style={{
-              fontSize: '0.8125rem',
-              color: 'var(--text-tertiary)',
-              fontStyle: 'italic',
-              marginBottom: '0.125rem',
-            }}
-          >
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', fontStyle: 'italic', marginBottom: '0.125rem' }}>
             {species.scientific_name}
           </p>
-          <p
-            style={{
-              fontSize: '0.8125rem',
-              color: 'var(--text-secondary)',
-              marginBottom: '2rem',
-            }}
-          >
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '2rem' }}>
             {species.segmentName}
           </p>
 
@@ -125,28 +131,14 @@ export default function DetailPanel({ species, onClose }) {
               marginBottom: '0.375rem',
             }}
           >
-            {species.tissue_concentration_ng_g}
-            <span
-              style={{
-                fontSize: '1rem',
-                color: 'var(--text-secondary)',
-                marginLeft: '0.5rem',
-                fontWeight: 400,
-              }}
-            >
+            {tissueConc}
+            <span style={{ fontSize: '1rem', color: 'var(--text-secondary)', marginLeft: '0.5rem', fontWeight: 400 }}>
               ng/g
             </span>
           </div>
 
-          <div
-            style={{
-              fontSize: '0.75rem',
-              color: 'var(--text-tertiary)',
-              fontFamily: 'var(--font-mono)',
-              marginBottom: '0.75rem',
-            }}
-          >
-            EPA reference: {epaLimit} ng/g
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginBottom: '0.75rem' }}>
+            EPA screening level: {epaLimit} ng/g
           </div>
 
           {/* Multiplier badge */}
@@ -159,98 +151,62 @@ export default function DetailPanel({ species, onClose }) {
               fontFamily: 'var(--font-mono)',
               fontWeight: 500,
               color: isOver ? STATUS_COLORS.unsafe : STATUS_COLORS.safe,
-              background: isOver
-                ? 'rgba(220, 68, 68, 0.12)'
-                : 'rgba(46, 184, 114, 0.12)',
+              background: isOver ? 'rgba(220, 68, 68, 0.12)' : 'rgba(46, 184, 114, 0.12)',
               marginBottom: '0.5rem',
             }}
           >
             {multiplier}x {isOver ? 'over' : 'under'} limit
           </div>
 
-          {/* Confidence interval */}
           {species.confidence_interval && (
-            <div
-              style={{
-                fontSize: '0.6875rem',
-                color: 'var(--text-tertiary)',
-                fontFamily: 'var(--font-mono)',
-                marginTop: '0.375rem',
-              }}
-            >
+            <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: '0.375rem' }}>
               95% CI: [{species.confidence_interval[0]}, {species.confidence_interval[1]}] ng/g
             </div>
           )}
 
-          <div
-            style={{
-              marginTop: '0.75rem',
-              fontSize: '0.8125rem',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            {species.safety_status === 'safe'
+          <div style={{ marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+            {species.safety_status_recreational === 'safe'
               ? 'Safe for regular consumption'
-              : `Maximum ${species.safe_servings_per_month} serving${species.safe_servings_per_month > 1 ? 's' : ''} per month`}
+              : `Maximum ${species.safe_servings_per_month_recreational} serving${species.safe_servings_per_month_recreational > 1 ? 's' : ''} per month (recreational)`}
           </div>
         </div>
 
-        {/* Section B: Contributing Factors */}
-        <Section title="Why is this fish contaminated?">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {species.contributing_factors?.map((factor) => (
-              <div key={factor.factor}>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    marginBottom: '0.25rem',
-                    fontSize: '0.75rem',
-                  }}
-                >
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    {factor.factor}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      color: 'var(--text-tertiary)',
-                    }}
-                  >
-                    {factor.contribution_pct}%
-                  </span>
-                </div>
-                <div
-                  style={{
-                    height: '4px',
-                    borderRadius: '2px',
-                    background: 'var(--bg-secondary)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${factor.contribution_pct}%`,
-                      height: '100%',
-                      borderRadius: '2px',
-                      background: FACTOR_COLORS[factor.type] || 'var(--text-tertiary)',
-                      transition: 'width 400ms ease-out',
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
+        {/* Section B: Contributing Factors (from XGBoost feature importance) */}
+        {segment?.top_contributing_features && (
+          <Section title="Why is this location contaminated?">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {segment.top_contributing_features.map((feat) => {
+                const label = FEATURE_LABELS[feat.feature] || feat.feature
+                const type = FEATURE_TYPES[feat.feature] || 'environmental'
+                const pct = Math.round(feat.importance * 100)
+                return (
+                  <div key={feat.feature}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', fontSize: '0.75rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{pct}%</span>
+                    </div>
+                    <div style={{ height: '4px', borderRadius: '2px', background: 'var(--bg-secondary)', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          width: `${pct}%`,
+                          height: '100%',
+                          borderRadius: '2px',
+                          background: FACTOR_COLORS[type],
+                          transition: 'width 400ms ease-out',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Section>
+        )}
 
         {/* Section C: Accumulation Timeline */}
         {species.accumulation_curve && (
           <Section title="Accumulation over time">
-            <AccumulationChart
-              data={species.accumulation_curve}
-              epaLimit={epaLimit}
-              statusColor={statusColor}
-            />
+            <AccumulationChart data={species.accumulation_curve} epaLimit={epaLimit} statusColor={statusColor} />
           </Section>
         )}
 
@@ -260,6 +216,11 @@ export default function DetailPanel({ species, onClose }) {
             <Pathway pathway={species.pathway} />
           </Section>
         )}
+
+        {/* Section E: Who Is At Risk? */}
+        <Section title="Who is at risk?">
+          <ExposureDisparity species={species} demographics={segment?.demographics} />
+        </Section>
       </div>
     </>
   )
@@ -268,13 +229,7 @@ export default function DetailPanel({ species, onClose }) {
 function Section({ title, children }) {
   return (
     <div style={{ marginBottom: '2rem' }}>
-      <div
-        style={{
-          height: '1px',
-          background: 'var(--border)',
-          marginBottom: '1rem',
-        }}
-      />
+      <div style={{ height: '1px', background: 'var(--border)', marginBottom: '1rem' }} />
       <h3
         style={{
           fontFamily: 'var(--font-body)',
@@ -308,61 +263,18 @@ function AccumulationChart({ data, epaLimit, statusColor }) {
 
   const points = data.months.map((m, i) => `${scaleX(m)},${scaleY(data.concentration_ng_g[i])}`)
   const linePath = `M${points.join(' L')}`
-
   const epaY = scaleY(epaLimit)
 
   return (
     <svg width={width} height={height} style={{ display: 'block' }}>
-      {/* EPA limit line */}
-      <line
-        x1={padding.left}
-        y1={epaY}
-        x2={width - padding.right}
-        y2={epaY}
-        stroke="var(--text-tertiary)"
-        strokeWidth={1}
-        strokeDasharray="4 3"
-      />
-      <text
-        x={padding.left - 4}
-        y={epaY - 4}
-        fill="var(--text-tertiary)"
-        fontSize={9}
-        fontFamily="var(--font-mono)"
-        textAnchor="end"
-      >
+      <line x1={padding.left} y1={epaY} x2={width - padding.right} y2={epaY} stroke="var(--text-tertiary)" strokeWidth={1} strokeDasharray="4 3" />
+      <text x={padding.left - 4} y={epaY - 4} fill="var(--text-tertiary)" fontSize={9} fontFamily="var(--font-mono)" textAnchor="end">
         EPA {epaLimit}
       </text>
-
-      {/* Accumulation line */}
-      <path
-        d={linePath}
-        fill="none"
-        stroke={statusColor}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      {/* End dot */}
-      <circle
-        cx={scaleX(data.months[data.months.length - 1])}
-        cy={scaleY(data.concentration_ng_g[data.concentration_ng_g.length - 1])}
-        r={3}
-        fill={statusColor}
-      />
-
-      {/* X-axis labels */}
+      <path d={linePath} fill="none" stroke={statusColor} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={scaleX(data.months[data.months.length - 1])} cy={scaleY(data.concentration_ng_g[data.concentration_ng_g.length - 1])} r={3} fill={statusColor} />
       {[0, 12, 24, 36].filter((m) => m <= maxMonths).map((m) => (
-        <text
-          key={m}
-          x={scaleX(m)}
-          y={height - 4}
-          fill="var(--text-tertiary)"
-          fontSize={9}
-          fontFamily="var(--font-mono)"
-          textAnchor="middle"
-        >
+        <text key={m} x={scaleX(m)} y={height - 4} fill="var(--text-tertiary)" fontSize={9} fontFamily="var(--font-mono)" textAnchor="middle">
           {m === 0 ? '0' : `${m}mo`}
         </text>
       ))}
@@ -373,14 +285,14 @@ function AccumulationChart({ data, epaLimit, statusColor }) {
 function Pathway({ pathway }) {
   const steps = [
     {
-      label: pathway.source_name?.split(' ').slice(0, 2).join(' ') || 'Source',
-      value: `${pathway.discharge_ppt} ppt`,
+      label: pathway.source_facility?.split(' ').slice(0, 2).join(' ') || 'Source',
+      value: `${pathway.discharge_ng_l} ng/L`,
       annotation: null,
       color: 'var(--text-tertiary)',
     },
     {
       label: 'River Water',
-      value: `${pathway.water_concentration_ppt} ppt`,
+      value: `${pathway.water_concentration_ng_l} ng/L`,
       annotation: `÷${pathway.dilution_factor} dilution`,
       color: STATUS_COLORS.limited,
     },
@@ -388,46 +300,22 @@ function Pathway({ pathway }) {
       label: 'Fish Tissue',
       value: `${pathway.tissue_concentration_ng_g} ng/g`,
       annotation: `×${pathway.bcf_applied} BCF`,
-      color: pathway.tissue_concentration_ng_g > pathway.epa_reference_dose_ng_g
-        ? STATUS_COLORS.unsafe
-        : STATUS_COLORS.safe,
+      color: STATUS_COLORS.unsafe,
     },
   ]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-      {steps.map((step, i) => (
+      {steps.map((step) => (
         <div key={step.label}>
-          {/* Annotation on connecting line */}
           {step.annotation && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.25rem 0 0.25rem 1.25rem',
-              }}
-            >
-              <div
-                style={{
-                  width: '1px',
-                  height: '16px',
-                  background: 'var(--border)',
-                }}
-              />
-              <span
-                style={{
-                  fontSize: '0.6875rem',
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--text-tertiary)',
-                }}
-              >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.25rem 0 0.25rem 1.25rem' }}>
+              <div style={{ width: '1px', height: '16px', background: 'var(--border)' }} />
+              <span style={{ fontSize: '0.6875rem', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>
                 {step.annotation}
               </span>
             </div>
           )}
-
-          {/* Node */}
           <div
             style={{
               display: 'flex',
@@ -440,29 +328,112 @@ function Pathway({ pathway }) {
             }}
           >
             <div>
-              <div
-                style={{
-                  fontSize: '0.75rem',
-                  color: 'var(--text-secondary)',
-                  marginBottom: '0.125rem',
-                }}
-              >
-                {step.label}
-              </div>
-              <div
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  color: step.color,
-                }}
-              >
-                {step.value}
-              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.125rem' }}>{step.label}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.875rem', fontWeight: 500, color: step.color }}>{step.value}</div>
             </div>
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function ExposureDisparity({ species, demographics }) {
+  const recHQ = species.hazard_quotient_recreational
+  const subHQ = species.hazard_quotient_subsistence
+  const maxHQ = Math.max(recHQ, subHQ, 1.5)
+  const thresholdPct = (1.0 / maxHQ) * 100
+
+  const barColor = (hq) => (hq >= 1.0 ? STATUS_COLORS.unsafe : hq >= 0.5 ? STATUS_COLORS.limited : STATUS_COLORS.safe)
+
+  return (
+    <div>
+      {/* Recreational */}
+      <div style={{ marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.375rem' }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Recreational angler</span>
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>
+            HQ {recHQ.toFixed(1)}
+          </span>
+        </div>
+        <div style={{ position: 'relative', height: '8px', borderRadius: '4px', background: 'var(--bg-secondary)' }}>
+          <div
+            style={{
+              width: `${Math.min((recHQ / maxHQ) * 100, 100)}%`,
+              height: '100%',
+              borderRadius: '4px',
+              background: barColor(recHQ),
+              transition: 'width 400ms ease-out',
+            }}
+          />
+          {/* EPA threshold line */}
+          <div
+            style={{
+              position: 'absolute',
+              left: `${thresholdPct}%`,
+              top: '-4px',
+              bottom: '-4px',
+              width: '1px',
+              borderLeft: '1.5px dashed var(--text-tertiary)',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Subsistence */}
+      <div style={{ marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.375rem' }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Subsistence fisher</span>
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>
+            HQ {subHQ.toFixed(1)}
+          </span>
+        </div>
+        <div style={{ position: 'relative', height: '8px', borderRadius: '4px', background: 'var(--bg-secondary)' }}>
+          <div
+            style={{
+              width: `${Math.min((subHQ / maxHQ) * 100, 100)}%`,
+              height: '100%',
+              borderRadius: '4px',
+              background: barColor(subHQ),
+              transition: 'width 400ms ease-out',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              left: `${thresholdPct}%`,
+              top: '-4px',
+              bottom: '-4px',
+              width: '1px',
+              borderLeft: '1.5px dashed var(--text-tertiary)',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Threshold label */}
+      <div
+        style={{
+          fontSize: '0.625rem',
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--text-tertiary)',
+          textAlign: 'center',
+          marginBottom: '1rem',
+        }}
+      >
+        Dashed line = EPA Safety Threshold (HQ 1.0)
+      </div>
+
+      {/* Demographic callout */}
+      {demographics && (
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          Subsistence fishers in {demographics.nearest_tract_name} (median income ${demographics.median_income.toLocaleString()}) face{' '}
+          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500, color: 'var(--accent)' }}>
+            {demographics.exposure_multiplier_vs_recreational}x
+          </span>{' '}
+          the exposure of recreational anglers. An estimated {demographics.subsistence_fishing_estimated_pct}% of households rely on locally caught fish.
+        </div>
+      )}
     </div>
   )
 }

@@ -9,10 +9,9 @@ export default function Tooltip({ segment, position, onSpeciesClick }) {
 
   // Sort species worst-first
   const sorted = [...segment.species].sort(
-    (a, b) => b.tissue_concentration_ng_g - a.tissue_concentration_ng_g
+    (a, b) => b.tissue_total_pfas_ng_g - a.tissue_total_pfas_ng_g
   )
 
-  // Position: offset from cursor, flip if near viewport edge
   const tooltipWidth = 340
   const x =
     position.x + tooltipWidth + 40 > window.innerWidth
@@ -56,40 +55,35 @@ export default function Tooltip({ segment, position, onSpeciesClick }) {
           fontFamily: 'var(--font-mono)',
           fontSize: '0.6875rem',
           color: 'var(--text-tertiary)',
+          marginBottom: '0.125rem',
+        }}
+      >
+        Predicted Water PFAS: {segment.predicted_water_pfas_ng_l} ng/L
+      </div>
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.6875rem',
+          color: 'var(--text-tertiary)',
           marginBottom: '0.875rem',
         }}
       >
-        Water PFAS: {segment.water_pfas_concentration_ppt} ppt
+        Confidence: {Math.round(segment.prediction_confidence * 100)}%
       </div>
 
-      <div
-        style={{
-          height: '1px',
-          background: 'var(--border)',
-          marginBottom: '0.75rem',
-        }}
-      />
+      <div style={{ height: '1px', background: 'var(--border)', marginBottom: '0.75rem' }} />
 
       {/* Species list */}
       {sorted.map((species) => (
-        <div
-          key={species.common_name}
-          style={{ marginBottom: '0.625rem' }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
+        <div key={species.common_name} style={{ marginBottom: '0.625rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <div
                 style={{
                   width: '7px',
                   height: '7px',
                   borderRadius: '50%',
-                  background: STATUS_COLORS[species.safety_status],
+                  background: STATUS_COLORS[species.safety_status_recreational],
                   flexShrink: 0,
                 }}
               />
@@ -111,7 +105,7 @@ export default function Tooltip({ segment, position, onSpeciesClick }) {
                 color: 'var(--text-primary)',
               }}
             >
-              {species.tissue_concentration_ng_g} ng/g
+              {species.tissue_total_pfas_ng_g} ng/g
             </span>
           </div>
 
@@ -124,15 +118,10 @@ export default function Tooltip({ segment, position, onSpeciesClick }) {
               paddingLeft: '1.0rem',
             }}
           >
-            <span
-              style={{
-                fontSize: '0.6875rem',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              {species.safety_status === 'safe'
+            <span style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)' }}>
+              {species.safety_status_recreational === 'safe'
                 ? 'Safe for regular consumption'
-                : `Max ${species.safe_servings_per_month} serving${species.safe_servings_per_month > 1 ? 's' : ''}/month`}
+                : `Max ${species.safe_servings_per_month_recreational} serving${species.safe_servings_per_month_recreational > 1 ? 's' : ''}/month`}
             </span>
             <button
               onClick={() => onSpeciesClick(species, segment.name)}
@@ -151,6 +140,29 @@ export default function Tooltip({ segment, position, onSpeciesClick }) {
           </div>
         </div>
       ))}
+
+      {/* Demographics callout */}
+      {segment.demographics && (
+        <>
+          <div style={{ height: '1px', background: 'var(--border)', margin: '0.5rem 0 0.625rem' }} />
+          <div
+            style={{
+              fontSize: '0.6875rem',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.5,
+            }}
+          >
+            Subsistence fishers face{' '}
+            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+              {segment.demographics.exposure_multiplier_vs_recreational}x
+            </span>{' '}
+            the exposure of recreational anglers at this site.
+            <span style={{ color: 'var(--text-tertiary)', display: 'block', marginTop: '0.25rem' }}>
+              {segment.demographics.nearest_tract_name} — median income ${segment.demographics.median_income.toLocaleString()}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   )
 }

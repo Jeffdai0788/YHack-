@@ -3,7 +3,6 @@ import mapboxgl from 'mapbox-gl'
 
 mapboxgl.accessToken = 'pk.eyJ1IjoiamQxMjM0NTYiLCJhIjoiY21uYXR1dzdwMG43dTJwcHI0d2ltdXRzbCJ9.3tN6tOw4eqy-YGeGdU1Uhg'
 
-// Slightly muted data colors
 const SAFE_COLOR = '#2EB872'
 const LIMITED_COLOR = '#E0A030'
 const UNSAFE_COLOR = '#DC4444'
@@ -13,7 +12,6 @@ export default function MapView({ data, onSegmentHover, onCursorMove }) {
   const map = useRef(null)
   const [loaded, setLoaded] = useState(false)
 
-  // Defer map init until the container is actually visible on screen
   useEffect(() => {
     if (map.current) return
 
@@ -61,30 +59,25 @@ export default function MapView({ data, onSegmentHover, onCursorMove }) {
   function addRiverLayers() {
     const m = map.current
 
-    // River source
     m.addSource('river', {
       type: 'geojson',
-      data: data.river_geojson,
+      data: data.geojson_segments,
     })
 
-    // Glow layer (wide, transparent underneath)
+    // Glow layer
     m.addLayer({
       id: 'river-glow',
       type: 'line',
       source: 'river',
       paint: {
         'line-color': [
-          'interpolate',
-          ['linear'],
-          ['get', 'water_pfas_ppt'],
+          'interpolate', ['linear'], ['get', 'water_pfas_ng_l'],
           0, SAFE_COLOR,
           60, LIMITED_COLOR,
           120, UNSAFE_COLOR,
         ],
         'line-width': [
-          'interpolate',
-          ['linear'],
-          ['get', 'water_pfas_ppt'],
+          'interpolate', ['linear'], ['get', 'water_pfas_ng_l'],
           0, 6,
           120, 18,
         ],
@@ -100,17 +93,13 @@ export default function MapView({ data, onSegmentHover, onCursorMove }) {
       source: 'river',
       paint: {
         'line-color': [
-          'interpolate',
-          ['linear'],
-          ['get', 'water_pfas_ppt'],
+          'interpolate', ['linear'], ['get', 'water_pfas_ng_l'],
           0, SAFE_COLOR,
           60, LIMITED_COLOR,
           120, UNSAFE_COLOR,
         ],
         'line-width': [
-          'interpolate',
-          ['linear'],
-          ['get', 'water_pfas_ppt'],
+          'interpolate', ['linear'], ['get', 'water_pfas_ng_l'],
           0, 2,
           120, 5,
         ],
@@ -126,8 +115,8 @@ export default function MapView({ data, onSegmentHover, onCursorMove }) {
     m.on('mousemove', 'river-line', (e) => {
       m.getCanvas().style.cursor = 'pointer'
       const props = e.features[0].properties
-      const segmentId = props.segment_id
-      const segment = data.segments.find((s) => s.segment_id === segmentId)
+      const comid = props.comid
+      const segment = data.segments.find((s) => s.comid === comid)
       if (segment) {
         onSegmentHover(segment, e)
         onCursorMove({ x: e.point.x, y: e.point.y })
@@ -143,7 +132,6 @@ export default function MapView({ data, onSegmentHover, onCursorMove }) {
   function addFacilityMarkers() {
     data.facilities.forEach((facility) => {
       const el = document.createElement('div')
-      el.className = 'facility-marker'
       el.innerHTML = `
         <div style="
           width: 10px;
@@ -154,6 +142,8 @@ export default function MapView({ data, onSegmentHover, onCursorMove }) {
           box-shadow: 0 0 12px rgba(212, 145, 110, 0.4);
         "></div>
       `
+
+      const sectorLabel = facility.pfas_sector ? 'PFAS sector' : 'Non-PFAS sector'
 
       const popup = new mapboxgl.Popup({
         offset: 12,
@@ -166,9 +156,12 @@ export default function MapView({ data, onSegmentHover, onCursorMove }) {
           color: var(--text-primary);
           padding: 4px 0;
         ">
-          <div style="font-weight: 500; margin-bottom: 2px;">${facility.name}</div>
-          <div style="color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px;">
-            ${facility.pfas_discharge_ppt} ppt discharge
+          <div style="font-weight: 500; margin-bottom: 4px;">${facility.name}</div>
+          <div style="color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; margin-bottom: 2px;">
+            ${facility.estimated_pfas_discharge_ng_l} ng/L discharge
+          </div>
+          <div style="color: var(--text-tertiary); font-size: 10px;">
+            NPDES: ${facility.npdes_permit} | ${sectorLabel}
           </div>
         </div>
       `)
@@ -262,22 +255,8 @@ export default function MapView({ data, onSegmentHover, onCursorMove }) {
             { color: LIMITED_COLOR, label: '5-20 Limited' },
             { color: UNSAFE_COLOR, label: '> 20 Unsafe' },
           ].map(({ color, label }) => (
-            <div
-              key={label}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.375rem',
-              }}
-            >
-              <div
-                style={{
-                  width: '10px',
-                  height: '10px',
-                  borderRadius: '2px',
-                  background: color,
-                }}
-              />
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: color }} />
               <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
             </div>
           ))}
