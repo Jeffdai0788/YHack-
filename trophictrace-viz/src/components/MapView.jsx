@@ -153,6 +153,19 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       tolerance: 0.375,
     })
 
+    // Build point centroids from water-only filtered features
+    const waterPoints = {
+      type: 'FeatureCollection',
+      features: filteredFeatures.map((feat) => {
+        const coords = feat.geometry.type === 'Polygon' ? feat.geometry.coordinates[0] : feat.geometry.coordinates
+        const n = coords.length
+        const cx = coords.reduce((s, c) => s + c[0], 0) / n
+        const cy = coords.reduce((s, c) => s + c[1], 0) / n
+        return { type: 'Feature', properties: feat.properties, geometry: { type: 'Point', coordinates: [cx, cy] } }
+      }),
+    }
+    m.addSource('water-points', { type: 'geojson', data: waterPoints })
+
     // Color by PFAS concentration: green → amber → red
     const ZONE_COLOR = [
       'interpolate', ['linear'], ['get', 'pfas_ng_l'],
@@ -163,37 +176,60 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       100,  UNSAFE_COLOR,
     ]
 
-    // ── Filled contamination polygons — water-only, no heatmap ────────────
-    m.addLayer({
-      id: 'river-contamination',
-      type: 'fill',
-      source: 'contaminated-rivers',
-      paint: {
-        'fill-color': ZONE_COLOR,
-        'fill-opacity': 0.65,
-      },
-    })
-
-    // ── Subtle outline ─────────────────────────────────────────────────────
+    // ── Large blurred circles — creates smooth gradient fill on water ─────
+    // Each water-verified point gets a large translucent circle.
+    // Where circles overlap, colors blend into a continuous gradient.
+    // Since all points are on water, the color concentrates on water areas.
     m.addLayer({
       id: 'river-glow',
-      type: 'line',
-      source: 'contaminated-rivers',
+      type: 'circle',
+      source: 'water-points',
       paint: {
-        'line-color': ZONE_COLOR,
-        'line-width': 0.5,
-        'line-opacity': 0.4,
+        'circle-color': ZONE_COLOR,
+        'circle-radius': [
+          'interpolate', ['linear'], ['zoom'],
+          3,  4,
+          5,  8,
+          7,  16,
+          9,  30,
+          11, 50,
+          13, 80,
+        ],
+        'circle-opacity': 0.35,
+        'circle-blur': 1,  // max blur — makes circles soft-edged
       },
     })
 
-    // ── Invisible fill for hover/click detection ─────────────────────────
+    // ── Small solid station dots on top ────────────────────────────────────
+    m.addLayer({
+      id: 'river-contamination',
+      type: 'circle',
+      source: 'water-points',
+      paint: {
+        'circle-color': ZONE_COLOR,
+        'circle-radius': [
+          'interpolate', ['linear'], ['zoom'],
+          3,  1.5,
+          7,  3,
+          10, 5,
+          13, 8,
+        ],
+        'circle-opacity': 0.85,
+        'circle-stroke-color': ZONE_COLOR,
+        'circle-stroke-width': 0.5,
+        'circle-stroke-opacity': 0.4,
+      },
+    })
+
+    // ── Invisible large circles for hover/click detection ─────────────────
     m.addLayer({
       id: 'river-hit-area',
-      type: 'fill',
-      source: 'contaminated-rivers',
+      type: 'circle',
+      source: 'water-points',
       paint: {
-        'fill-color': 'transparent',
-        'fill-opacity': 0,
+        'circle-color': 'transparent',
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 8, 8, 20, 12, 35],
+        'circle-opacity': 0,
       },
     })
 
