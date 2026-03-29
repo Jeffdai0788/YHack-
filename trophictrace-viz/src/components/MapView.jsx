@@ -132,10 +132,24 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
   function addRiverLayers() {
     const m = map.current
 
-    // Source for line hover hit-area + flow centerline
+    // Filter riverGeo to only features whose centroid is over a water tile.
+    // This removes polygons that accidentally sit on land.
+    const filteredFeatures = riverGeo.features.filter((feat) => {
+      const coords = feat.geometry.type === 'Polygon' ? feat.geometry.coordinates[0] : feat.geometry.coordinates
+      const n = coords.length
+      const cx = coords.reduce((s, c) => s + c[0], 0) / n
+      const cy = coords.reduce((s, c) => s + c[1], 0) / n
+      const pt = m.project([cx, cy])
+      const waterHits = m.queryRenderedFeatures(pt, { layers: ['water'] })
+      return waterHits.length > 0
+    })
+    console.log(`Water filter: ${filteredFeatures.length}/${riverGeo.features.length} features on water`)
+
+    const filteredGeo = { type: 'FeatureCollection', features: filteredFeatures }
+
     m.addSource('contaminated-rivers', {
       type: 'geojson',
-      data: riverGeo,
+      data: filteredGeo,
       tolerance: 0.375,
     })
 
