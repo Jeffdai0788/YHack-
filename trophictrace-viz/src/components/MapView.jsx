@@ -9,10 +9,8 @@ const LIMITED_COLOR = '#E0A030'
 const MODERATE_COLOR = '#E8845A'
 const UNSAFE_COLOR = '#DC4444'
 
-// Green gradient for clean water (varies by zoom for depth)
-const WATER_GREEN_DARK = '#0B2E1F'
-const WATER_GREEN_MID = '#0F3D2A'
-const WATER_GREEN_LIGHT = '#134A33'
+// Slight blue tint for water bodies
+const WATER_TINT = '#4A90D9'
 
 export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady, speciesFilter }) {
   const mapContainer = useRef(null)
@@ -63,13 +61,19 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
 
   function getHotspotForSegment(seg) {
     const hotspots = [
-      { id: 'cape_fear', lat: 35.05, lng: -78.88 },
-      { id: 'lake_michigan', lat: 42.36, lng: -87.83 },
-      { id: 'ohio_river', lat: 39.26, lng: -81.55 },
-      { id: 'delaware_river', lat: 40.15, lng: -74.82 },
-      { id: 'huron_river', lat: 42.28, lng: -83.74 },
-      { id: 'merrimack_river', lat: 42.84, lng: -71.30 },
-      { id: 'tennessee_river', lat: 34.58, lng: -86.96 },
+      { id: 'cape_fear',          lat: 35.05, lng: -78.88 },
+      { id: 'lake_michigan',      lat: 42.36, lng: -87.82 },
+      { id: 'ohio_river',         lat: 39.26, lng: -81.55 },
+      { id: 'delaware_river',     lat: 40.15, lng: -74.82 },
+      { id: 'huron_river',        lat: 42.28, lng: -83.74 },
+      { id: 'merrimack_river',    lat: 42.84, lng: -71.30 },
+      { id: 'tennessee_river',    lat: 34.58, lng: -86.96 },
+      { id: 'cape_fear_atlantic', lat: 33.65, lng: -77.70 },
+      { id: 'delaware_atlantic',  lat: 38.50, lng: -74.70 },
+      { id: 'gulf_mexico',        lat: 28.80, lng: -89.20 },
+      { id: 'lake_erie',          lat: 41.78, lng: -83.20 },
+      { id: 'lake_ontario',       lat: 43.30, lng: -79.30 },
+      { id: 'merrimack_atlantic', lat: 42.82, lng: -70.55 },
     ]
     let minDist = Infinity
     let nearest = null
@@ -103,32 +107,20 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
     })
   }
 
-  // --- Restyle all water to gradient green ---
+  // --- Translucent blue tint on water bodies ---
 
   function restyleWaterLayer() {
     const m = map.current
 
-    // Base water layer — green with zoom-dependent variation
-    m.setPaintProperty('water', 'fill-color', [
-      'interpolate', ['linear'], ['zoom'],
-      3, WATER_GREEN_DARK,
-      7, WATER_GREEN_MID,
-      12, WATER_GREEN_LIGHT,
-    ])
-    m.setPaintProperty('water', 'fill-opacity', [
-      'interpolate', ['linear'], ['zoom'],
-      3, 0.85,
-      8, 0.9,
-      14, 0.95,
-    ])
+    m.setPaintProperty('water', 'fill-color', WATER_TINT)
+    m.setPaintProperty('water', 'fill-opacity', 0.18)
 
-    // Also restyle any waterway line layers in the base style
     const style = m.getStyle()
     if (style && style.layers) {
       style.layers.forEach((layer) => {
         if (layer.id.includes('waterway') && layer.type === 'line') {
-          m.setPaintProperty(layer.id, 'line-color', WATER_GREEN_MID)
-          m.setPaintProperty(layer.id, 'line-opacity', 0.7)
+          m.setPaintProperty(layer.id, 'line-color', WATER_TINT)
+          m.setPaintProperty(layer.id, 'line-opacity', 0.25)
         }
       })
     }
@@ -145,68 +137,59 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
       tolerance: 0.375,
     })
 
-    // Glow underlay — wider, blurred, lower opacity
+    // Discrete color step — each zone is a pure flat color, no blending between zones
+    const ZONE_COLOR = [
+      'step', ['get', 'pfas_ng_l'],
+      SAFE_COLOR,      // < 150  → green
+      150, LIMITED_COLOR,   // 150–499 → amber
+      500, MODERATE_COLOR,  // 500–899 → orange
+      900, UNSAFE_COLOR,    // ≥ 900   → red
+    ]
+
+    // Glow underlay — narrow blur so color doesn't spill into adjacent zones
     m.addLayer({
       id: 'river-glow',
       type: 'line',
       source: 'contaminated-rivers',
       paint: {
-        'line-color': [
-          'interpolate', ['linear'], ['get', 'pfas_ng_l'],
-          30, SAFE_COLOR,
-          200, LIMITED_COLOR,
-          500, MODERATE_COLOR,
-          900, UNSAFE_COLOR,
-        ],
+        'line-color': ZONE_COLOR,
         'line-width': [
           'interpolate', ['exponential', 1.5], ['zoom'],
-          4, ['interpolate', ['linear'], ['get', 'pfas_ng_l'], 30, 2, 500, 4, 1200, 6],
-          8, ['interpolate', ['linear'], ['get', 'pfas_ng_l'], 30, 5, 500, 10, 1200, 16],
-          12, ['interpolate', ['linear'], ['get', 'pfas_ng_l'], 30, 8, 500, 16, 1200, 28],
+          4, ['step', ['get', 'pfas_ng_l'], 3, 150, 5, 500, 7, 900, 9],
+          8, ['step', ['get', 'pfas_ng_l'], 6, 150, 10, 500, 14, 900, 18],
+          12, ['step', ['get', 'pfas_ng_l'], 10, 150, 16, 500, 22, 900, 28],
         ],
         'line-blur': [
           'interpolate', ['linear'], ['zoom'],
-          4, 3,
-          8, 6,
-          12, 10,
+          4, 1.5,
+          8, 2.5,
+          12, 4,
         ],
-        'line-opacity': [
-          'interpolate', ['linear'], ['get', 'pfas_ng_l'],
-          30, 0.08,
-          200, 0.15,
-          500, 0.22,
-          900, 0.30,
-        ],
+        'line-opacity': 0.18,
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     })
 
-    // Main contamination line
+    // Main contamination line — solid discrete color per zone
     m.addLayer({
       id: 'river-contamination',
       type: 'line',
       source: 'contaminated-rivers',
       paint: {
-        'line-color': [
-          'interpolate', ['linear'], ['get', 'pfas_ng_l'],
-          30, SAFE_COLOR,
-          200, LIMITED_COLOR,
-          500, MODERATE_COLOR,
-          900, UNSAFE_COLOR,
-        ],
+        'line-color': ZONE_COLOR,
         'line-width': [
           'interpolate', ['exponential', 1.5], ['zoom'],
-          4, ['interpolate', ['linear'], ['get', 'pfas_ng_l'], 30, 0.8, 500, 1.5, 1200, 2.5],
-          8, ['interpolate', ['linear'], ['get', 'pfas_ng_l'], 30, 2, 500, 4, 1200, 7],
-          12, ['interpolate', ['linear'], ['get', 'pfas_ng_l'], 30, 3, 500, 7, 1200, 12],
-          14, ['interpolate', ['linear'], ['get', 'pfas_ng_l'], 30, 4, 500, 10, 1200, 18],
+          4, ['step', ['get', 'pfas_ng_l'], 0.8, 150, 1.2, 500, 1.8, 900, 2.5],
+          8, ['step', ['get', 'pfas_ng_l'], 2,   150, 3,   500, 5,   900, 7],
+          12, ['step', ['get', 'pfas_ng_l'], 3,  150, 5,   500, 8,   900, 12],
+          14, ['step', ['get', 'pfas_ng_l'], 4,  150, 7,   500, 11,  900, 18],
         ],
         'line-opacity': [
-          'interpolate', ['linear'], ['get', 'pfas_ng_l'],
-          30, 0.5,
-          200, 0.7,
-          500, 0.85,
-          900, 0.95,
+          'step', ['get', 'pfas_ng_l'],
+          0.45,       // safe
+          150, 0.60,  // limited
+          500, 0.75,  // moderate
+          900, 0.88,  // unsafe
         ],
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -301,22 +284,25 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
         <div style={{ color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '0.625rem', fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Water PFAS Contamination (ng/L)
         </div>
-        {/* Gradient bar */}
-        <div style={{
-          height: '8px', borderRadius: '4px', marginBottom: '0.375rem',
-          background: `linear-gradient(to right, ${SAFE_COLOR}, ${LIMITED_COLOR}, ${MODERATE_COLOR}, ${UNSAFE_COLOR})`,
-          opacity: 0.85,
-        }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-tertiary)', fontSize: '0.625rem', fontFamily: 'var(--font-mono)' }}>
-          <span>0</span>
-          <span>200</span>
-          <span>500</span>
-          <span>900+</span>
+        {/* Discrete zone swatches */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          {[
+            { color: SAFE_COLOR,     label: '< 150 ng/L',  zone: 'Safe' },
+            { color: LIMITED_COLOR,  label: '150–499',     zone: 'Limited' },
+            { color: MODERATE_COLOR, label: '500–899',     zone: 'Moderate' },
+            { color: UNSAFE_COLOR,   label: '≥ 900',       zone: 'Unsafe' },
+          ].map(({ color, label, zone }) => (
+            <div key={zone} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ width: '28px', height: '6px', borderRadius: '3px', background: color, opacity: 0.88, flexShrink: 0 }} />
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.6875rem' }}>{zone}</span>
+              <span style={{ color: 'var(--text-tertiary)', fontSize: '0.625rem', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{label}</span>
+            </div>
+          ))}
         </div>
-        {/* Water base color indicator */}
-        <div style={{ marginTop: '0.625rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: WATER_GREEN_MID, border: '1px solid var(--border)' }} />
-          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.625rem' }}>Water bodies (no data = safe)</span>
+        {/* Water tint indicator */}
+        <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+          <div style={{ width: '28px', height: '8px', borderRadius: '2px', flexShrink: 0, background: WATER_TINT, opacity: 0.4, border: '1px solid var(--border)' }} />
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.625rem' }}>Unsampled water</span>
         </div>
       </div>
     </div>
