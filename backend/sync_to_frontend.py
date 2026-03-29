@@ -20,32 +20,25 @@ BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DATA_DIR = os.path.join(BACKEND_DIR, '..', 'trophictrace-viz', 'src', 'data')
 
 
-def generate_tiny_segment(lat, lng, rng, length=0.002):
+def generate_polygon(lat, lng, rng, radius_deg=0.003, n_pts=12):
     """
-    Generate a very short LineString (3-4 points, ~200m) that stays
-    extremely close to the source coordinate. This prevents land bleed.
+    Generate a small irregular polygon (circle-ish) around a point.
+    radius_deg ~0.003 ≈ 300m at mid-latitudes.
     """
-    n_pts = rng.randint(3, 5)
-    angle = rng.uniform(0, 2 * np.pi)
     coords = []
-    cx, cy = lng, lat
-    step = length / n_pts
-
     for i in range(n_pts):
-        # Tiny steps with slight curve
-        wobble = rng.uniform(-0.0003, 0.0003)
+        angle = 2 * np.pi * i / n_pts
+        r = radius_deg * rng.uniform(0.7, 1.3)  # irregular edges
         coords.append([
-            round(cx + wobble, 6),
-            round(cy + wobble * 0.7, 6),
+            round(lng + r * np.cos(angle), 6),
+            round(lat + r * np.sin(angle) * 0.85, 6),  # compress lat slightly
         ])
-        cx += np.cos(angle) * step + rng.uniform(-0.0002, 0.0002)
-        cy += np.sin(angle) * step + rng.uniform(-0.0002, 0.0002)
-
-    return coords
+    coords.append(coords[0])  # close the ring
+    return [coords]  # GeoJSON Polygon is array of rings
 
 
 def make_feature(coords, hotspot_id, name, pfas_ng_l, risk_level, stream_order, comid):
-    """Build a single GeoJSON Feature."""
+    """Build a single GeoJSON Polygon Feature."""
     return {
         "type": "Feature",
         "properties": {
@@ -57,7 +50,7 @@ def make_feature(coords, hotspot_id, name, pfas_ng_l, risk_level, stream_order, 
             "stream_order": stream_order,
         },
         "geometry": {
-            "type": "LineString",
+            "type": "Polygon",
             "coordinates": coords,
         },
     }
@@ -186,7 +179,7 @@ def sync():
         hotspot_id = slugify(name)
 
         # Very short segment — stays near the water body coordinate
-        coords = generate_tiny_segment(lat, lng, rng, length=0.002)
+        coords = generate_polygon(lat, lng, rng, radius_deg=0.003)
         feat = make_feature(coords, hotspot_id, name, pfas, risk, stream_order, comid)
         geo_features.append(feat)
 
@@ -209,7 +202,7 @@ def sync():
             comid = lake_comid + j
             pt_name = f"{nice_name} — Station {j+1}"
 
-            coords = generate_tiny_segment(lat, lng, rng, length=0.003)
+            coords = generate_polygon(lat, lng, rng, radius_deg=0.004)
             feat = make_feature(coords, hotspot_id, pt_name, pfas, risk, 6, comid)
             geo_features.append(feat)
 
@@ -337,7 +330,7 @@ def sync():
                 river_comid += 1
                 pt_name = f"{river['name']} — Mile {k * 50 + int(t * 50)}"
 
-                coords = generate_tiny_segment(lat, lng, rng, length=0.003)
+                coords = generate_polygon(lat, lng, rng, radius_deg=0.004)
                 feat = make_feature(coords, slugify(river['name']), pt_name, pfas, risk, so, river_comid)
                 geo_features.append(feat)
 

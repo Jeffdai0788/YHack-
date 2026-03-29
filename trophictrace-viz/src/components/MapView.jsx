@@ -140,13 +140,16 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
     })
 
 
-    // Build point source for heatmap from LineString midpoints
+    // Build point source for heatmap from polygon centroids
     const plumePoints = {
       type: 'FeatureCollection',
       features: riverGeo.features.map((feat) => {
-        const coords = feat.geometry.coordinates
-        const mid = coords[Math.floor(coords.length / 2)]
-        return { type: 'Feature', properties: feat.properties, geometry: { type: 'Point', coordinates: mid } }
+        const coords = feat.geometry.type === 'Polygon' ? feat.geometry.coordinates[0] : feat.geometry.coordinates
+        // Centroid: average of all points
+        const n = coords.length
+        const cx = coords.reduce((s, c) => s + c[0], 0) / n
+        const cy = coords.reduce((s, c) => s + c[1], 0) / n
+        return { type: 'Feature', properties: feat.properties, geometry: { type: 'Point', coordinates: [cx, cy] } }
       }),
     }
     m.addSource('plume-points', { type: 'geojson', data: plumePoints })
@@ -213,68 +216,50 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       100,  UNSAFE_COLOR,
     ]
 
-    // ── Colored river lines on top of heatmap for detail at high zoom ──────
+    // ── Filled polygons on top of heatmap — visible at higher zoom ────────
     m.addLayer({
       id: 'river-contamination',
-      type: 'line',
+      type: 'fill',
       source: 'contaminated-rivers',
       paint: {
-        'line-color': ZONE_COLOR,
-        'line-width': [
+        'fill-color': ZONE_COLOR,
+        'fill-opacity': [
           'interpolate', ['linear'], ['zoom'],
           3,  0,
-          7,  0,
-          9,  1.5,
-          11, 2.5,
-          13, 3.5,
-        ],
-        'line-opacity': [
-          'interpolate', ['linear'], ['zoom'],
-          3,  0,
-          8,  0,
-          10, 0.6,
-          13, 0.85,
+          8,  0.15,
+          10, 0.45,
+          13, 0.65,
         ],
       },
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
     })
 
-    // ── Glow behind lines (visible at high zoom) ───────────────────────────
+    // ── Polygon outline for definition ─────────────────────────────────────
     m.addLayer({
       id: 'river-glow',
       type: 'line',
       source: 'contaminated-rivers',
       paint: {
         'line-color': ZONE_COLOR,
-        'line-width': [
-          'interpolate', ['linear'], ['zoom'],
-          3,  0,
-          9,  4,
-          11, 8,
-          13, 14,
-        ],
+        'line-width': 1,
         'line-opacity': [
           'interpolate', ['linear'], ['zoom'],
           3,  0,
-          9,  0.08,
-          13, 0.15,
+          9,  0.2,
+          13, 0.4,
         ],
-        'line-blur': 8,
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-    }, 'river-contamination')
+    })
 
-    // ── Invisible wide hit area for hover detection ─────────────────────────
+    // ── Invisible fill for hover/click detection ─────────────────────────
     m.addLayer({
       id: 'river-hit-area',
-      type: 'line',
+      type: 'fill',
       source: 'contaminated-rivers',
       paint: {
-        'line-color': 'transparent',
-        'line-width': ['interpolate', ['linear'], ['zoom'], 4, 12, 8, 20, 12, 30],
-        'line-opacity': 0,
+        'fill-color': 'transparent',
+        'fill-opacity': 0,
       },
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
     })
 
     m.on('mousemove', 'river-hit-area', (e) => {
