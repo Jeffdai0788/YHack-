@@ -429,7 +429,36 @@ def sync():
 
     print(f"  Added {n_river_pts} river corridor points across {len(RIVER_CORRIDORS)} rivers")
 
-    # Update the output with lake + river segments
+    # === Deduplicate overlapping features ===
+    # Multiple WQP stations at similar locations create stacked polygons.
+    # Keep only the highest-PFAS feature per ~1km grid cell.
+    seen_cells = {}  # (lng_round, lat_round) → index in deduped list
+    deduped_features = []
+    deduped_segments = []
+
+    for idx, feat in enumerate(geo_features):
+        coords = feat['geometry']['coordinates'][0]
+        n = len(coords)
+        cx = sum(c[0] for c in coords) / n
+        cy = sum(c[1] for c in coords) / n
+        cell = (round(cx, 2), round(cy, 2))  # ~1km grid
+        pfas = feat['properties']['pfas_ng_l']
+
+        if cell not in seen_cells:
+            seen_cells[cell] = len(deduped_features)
+            deduped_features.append(feat)
+            deduped_segments.append(frontend_segments[idx])
+        elif pfas > deduped_features[seen_cells[cell]]['properties']['pfas_ng_l']:
+            # Replace with higher-PFAS version
+            di = seen_cells[cell]
+            deduped_features[di] = feat
+            deduped_segments[di] = frontend_segments[idx]
+
+    print(f"  Deduped: {len(geo_features)} → {len(deduped_features)} features ({len(geo_features) - len(deduped_features)} overlaps removed)")
+    geo_features = deduped_features
+    frontend_segments = deduped_segments
+
+    # Update the output with deduplicated segments
     frontend_output['segments'] = frontend_segments
 
     river_geojson = {
