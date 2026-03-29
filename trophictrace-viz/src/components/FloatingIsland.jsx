@@ -87,7 +87,7 @@ export default function FloatingIsland({ segment, demographics, position, onSpec
 
         {/* Header */}
         <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.9375rem', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
-          Segment {segment.segment_id.replace('seg_', '#')}
+          {segment.name || `Segment ${segment.segment_id.replace('seg_', '#')}`}
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginBottom: '0.125rem' }}>
           Water PFAS: {segment.predicted_water_pfas_ng_l.toFixed(1)} ng/L
