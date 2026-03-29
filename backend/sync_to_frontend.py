@@ -304,6 +304,82 @@ def sync():
         {"name": "Willamette River", "stream_order": 5, "pfas_range": (2, 12),
          "waypoints": [(43.8, -122.8), (44.1, -123.1), (44.6, -123.1), (45.0, -122.9),
                        (45.5, -122.7)]},
+        # Hudson River
+        {"name": "Hudson River", "stream_order": 6, "pfas_range": (3, 25),
+         "waypoints": [(43.8, -73.9), (43.3, -73.7), (42.7, -73.7), (42.2, -73.8),
+                       (41.7, -73.9), (41.1, -73.9), (40.8, -74.0)]},
+        # Connecticut River
+        {"name": "Connecticut River", "stream_order": 6, "pfas_range": (2, 18),
+         "waypoints": [(45.0, -71.5), (44.4, -72.0), (43.6, -72.3), (42.6, -72.6),
+                       (42.1, -72.6), (41.5, -72.4), (41.3, -72.3)]},
+        # Alabama River
+        {"name": "Alabama River", "stream_order": 6, "pfas_range": (2, 14),
+         "waypoints": [(33.0, -87.5), (32.4, -87.0), (32.0, -86.8), (31.5, -87.2),
+                       (31.1, -87.5), (30.7, -87.9)]},
+        # Tombigbee River
+        {"name": "Tombigbee River", "stream_order": 5, "pfas_range": (1, 10),
+         "waypoints": [(34.3, -88.2), (33.5, -88.4), (32.8, -88.0), (32.2, -87.9),
+                       (31.5, -87.9), (31.1, -87.9)]},
+        # St. Johns River (FL)
+        {"name": "St. Johns River", "stream_order": 5, "pfas_range": (3, 20),
+         "waypoints": [(27.8, -80.7), (28.5, -80.8), (29.0, -81.1), (29.5, -81.4),
+                       (29.9, -81.5), (30.3, -81.6)]},
+        # Apalachicola River
+        {"name": "Apalachicola River", "stream_order": 5, "pfas_range": (1, 8),
+         "waypoints": [(30.7, -84.9), (30.3, -85.0), (29.9, -85.0), (29.7, -85.0)]},
+        # Roanoke River
+        {"name": "Roanoke River", "stream_order": 5, "pfas_range": (2, 15),
+         "waypoints": [(37.3, -80.0), (37.0, -79.4), (36.5, -78.9), (36.3, -77.7),
+                       (35.9, -76.7)]},
+        # Rappahannock River
+        {"name": "Rappahannock River", "stream_order": 4, "pfas_range": (2, 12),
+         "waypoints": [(38.6, -78.0), (38.4, -77.5), (38.3, -77.1), (38.2, -76.6)]},
+        # Wisconsin River
+        {"name": "Wisconsin River", "stream_order": 5, "pfas_range": (1, 10),
+         "waypoints": [(45.8, -89.7), (45.0, -89.8), (44.3, -89.8), (43.8, -90.0),
+                       (43.1, -90.3), (43.0, -90.7)]},
+        # Minnesota River
+        {"name": "Minnesota River", "stream_order": 5, "pfas_range": (2, 15),
+         "waypoints": [(45.3, -96.6), (44.7, -95.5), (44.5, -94.2), (44.5, -93.6),
+                       (44.8, -93.2)]},
+        # Brazos River (TX)
+        {"name": "Brazos River", "stream_order": 6, "pfas_range": (1, 10),
+         "waypoints": [(33.2, -98.7), (32.1, -97.8), (31.1, -97.0), (30.6, -96.5),
+                       (29.8, -95.8), (29.0, -95.4)]},
+        # Trinity River (TX)
+        {"name": "Trinity River", "stream_order": 5, "pfas_range": (2, 18),
+         "waypoints": [(33.2, -96.8), (32.8, -96.6), (32.0, -96.1), (31.3, -95.5),
+                       (30.5, -95.0), (29.8, -94.8)]},
+        # Wabash River
+        {"name": "Wabash River", "stream_order": 5, "pfas_range": (2, 14),
+         "waypoints": [(40.8, -85.2), (40.4, -85.7), (39.8, -86.9), (39.1, -87.4),
+                       (38.5, -87.7), (37.8, -87.9)]},
+        # Illinois River
+        {"name": "Illinois River", "stream_order": 5, "pfas_range": (3, 20),
+         "waypoints": [(41.3, -88.2), (41.0, -89.1), (40.6, -89.6), (40.0, -89.9),
+                       (39.5, -90.5), (38.9, -90.5)]},
+        # Cumberland River
+        {"name": "Cumberland River", "stream_order": 5, "pfas_range": (2, 12),
+         "waypoints": [(36.8, -83.6), (36.6, -84.2), (36.2, -85.5), (36.2, -86.8),
+                       (36.5, -87.5), (36.9, -87.9)]},
+        # Yellowstone River
+        {"name": "Yellowstone River", "stream_order": 5, "pfas_range": (0.5, 5),
+         "waypoints": [(44.6, -110.4), (45.3, -109.5), (45.8, -108.5), (46.3, -107.5),
+                       (46.8, -106.0), (47.1, -104.7), (47.7, -104.0)]},
+        # Merrimack River
+        {"name": "Merrimack River", "stream_order": 5, "pfas_range": (3, 22),
+         "waypoints": [(43.6, -71.9), (43.2, -71.6), (42.9, -71.3), (42.8, -71.1),
+                       (42.8, -70.9)]},
+        # Penobscot River (ME)
+        {"name": "Penobscot River", "stream_order": 5, "pfas_range": (1, 8),
+         "waypoints": [(46.1, -68.9), (45.5, -68.8), (44.8, -68.8), (44.5, -68.8)]},
+        # Neuse River (NC)
+        {"name": "Neuse River", "stream_order": 5, "pfas_range": (3, 18),
+         "waypoints": [(36.1, -79.1), (35.8, -78.6), (35.4, -77.9), (35.1, -77.1),
+                       (35.0, -76.6)]},
+        # Santee-Cooper (SC)
+        {"name": "Santee River", "stream_order": 5, "pfas_range": (2, 12),
+         "waypoints": [(34.1, -80.9), (33.7, -80.4), (33.5, -80.2), (33.2, -79.6)]},
     ]
 
     river_comid = 9500000
