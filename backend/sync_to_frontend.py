@@ -202,7 +202,7 @@ def sync():
             comid = lake_comid + j
             pt_name = f"{nice_name} — Station {j+1}"
 
-            coords = generate_polygon(lat, lng, rng, radius_deg=0.008)
+            coords = generate_polygon(lat, lng, rng, radius_deg=0.004)
             feat = make_feature(coords, hotspot_id, pt_name, pfas, risk, 6, comid)
             geo_features.append(feat)
 
