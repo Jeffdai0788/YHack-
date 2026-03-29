@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import riverGeo from '../data/riverGeometry.json'
+import { ENV_CENTERS } from '../data/envCenters'
 
 mapboxgl.accessToken = 'pk.eyJ1IjoiamQxMjM0NTYiLCJhIjoiY21uYXR1dzdwMG43dTJwcHI0d2ltdXRzbCJ9.3tN6tOw4eqy-YGeGdU1Uhg'
 
@@ -12,7 +13,7 @@ const UNSAFE_COLOR = '#DC4444'
 // Slight blue tint for water bodies
 const WATER_TINT = '#4A90D9'
 
-export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady, speciesFilter }) {
+export default function MapView({ data, onSegmentHover, onSegmentClick, onCursorMove, onMapReady, speciesFilter }) {
   const mapContainer = useRef(null)
   const map = useRef(null)
   const [loaded, setLoaded] = useState(false)
@@ -102,6 +103,7 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
       restyleWaterLayer()
       addRiverLayers()
       addFacilityMarkers()
+      addEnvCenterMarkers()
       setLoaded(true)
       if (onMapReady) onMapReady(map.current)
     })
@@ -284,6 +286,43 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
     m.on('mouseleave', 'river-hit-area', () => {
       m.getCanvas().style.cursor = ''
       onSegmentHover(null)
+    })
+
+    m.on('click', 'river-hit-area', (e) => {
+      const point = e.lngLat
+      let nearest = null
+      let minDist = Infinity
+      for (const seg of data.segments) {
+        const d = Math.hypot(seg.latitude - point.lat, seg.longitude - point.lng)
+        if (d < minDist) { minDist = d; nearest = seg }
+      }
+      if (nearest && minDist < 0.5 && onSegmentClick) {
+        onSegmentClick(nearest)
+      }
+    })
+  }
+
+  function addEnvCenterMarkers() {
+    const TYPE_COLOR = { epa_regional: '#06B6D4', state_pfas: '#3B82F6', national_hotline: '#8B5CF6' }
+    ENV_CENTERS.forEach((center) => {
+      const color = TYPE_COLOR[center.type] ?? '#888'
+      const el = document.createElement('div')
+      el.title = center.name
+      el.innerHTML = `<div style="
+        width: 10px; height: 10px;
+        background: ${color};
+        border: 1.5px solid rgba(255,255,255,0.5);
+        transform: rotate(45deg);
+        box-shadow: 0 0 8px ${color}88;
+        cursor: default;
+      "></div>`
+      const popup = new mapboxgl.Popup({ offset: 12, closeButton: false })
+        .setHTML(`<div style="font-family: var(--font-body); font-size: 12px; color: var(--text-primary); padding: 4px 0;">
+          <div style="font-weight: 500; margin-bottom: 2px;">${center.name}</div>
+          <div style="color: ${color}; font-size: 10px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.05em;">${center.type.replace('_', ' ')}</div>
+          <div style="color: var(--text-tertiary); font-size: 10px;">${center.phone}</div>
+        </div>`)
+      new mapboxgl.Marker(el).setLngLat([center.lng, center.lat]).setPopup(popup).addTo(map.current)
     })
   }
 

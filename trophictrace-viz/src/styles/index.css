@@ -73,3 +73,26 @@ code, .mono {
 .mapboxgl-ctrl-attrib {
   opacity: 0.5;
 }
+
+/* ── Hero animations ─────────────────────────────────────────────────────── */
+@keyframes hero-sun-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1);    opacity: 0.72; }
+  50%       { transform: translate(-50%, -50%) scale(1.12); opacity: 0.90; }
+}
+
+@keyframes hero-atmosphere {
+  0%, 100% { opacity: 0.50; }
+  50%       { opacity: 0.68; }
+}
+
+@keyframes hero-scroll-line {
+  0%        { transform: scaleY(0); transform-origin: top;    opacity: 0; }
+  40%       { transform: scaleY(1); transform-origin: top;    opacity: 1; }
+  80%       { transform: scaleY(1); transform-origin: bottom; opacity: 0.6; }
+  100%      { transform: scaleY(0); transform-origin: bottom; opacity: 0; }
+}
+
+@keyframes action-panel-in {
+  from { transform: translateX(-100%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}

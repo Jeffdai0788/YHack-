@@ -5,6 +5,7 @@ import FloatingIsland from './components/FloatingIsland'
 import DetailPanel from './components/DetailPanel'
 import FishSearch from './components/FishSearch'
 import AIChatPrompt from './components/AIChatPrompt'
+import ActionPanel from './components/ActionPanel'
 import data from './data/nationalResults.json'
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
   const [selectedSpecies, setSelectedSpecies] = useState(null)
   const [selectedSegment, setSelectedSegment] = useState(null)
   const [filterSpeciesName, setFilterSpeciesName] = useState(null)
+  const [clickedSegment, setClickedSegment] = useState(null)
   const mapRef = useRef(null)
 
   useEffect(() => {
@@ -26,8 +28,24 @@ export default function App() {
   }, [])
 
   const handleSegmentHover = (segment, e) => {
+    if (clickedSegment) return
     setHoveredSegment(segment)
     if (e) setCursorPos({ x: e.point.x, y: e.point.y })
+  }
+
+  const handleSegmentClick = (segment) => {
+    setClickedSegment(segment)
+    setHoveredSegment(null)
+    setSelectedSpecies(null)
+    setSelectedSegment(null)
+  }
+
+  const handleAlertClick = (segment) => {
+    setClickedSegment(segment)
+    setHoveredSegment(null)
+    if (mapRef.current) {
+      mapRef.current.flyTo({ center: [segment.longitude, segment.latitude], zoom: 8, duration: 1500 })
+    }
   }
 
   const handleSpeciesClick = (species, segmentId) => {
@@ -48,6 +66,7 @@ export default function App() {
           <MapView
             data={data}
             onSegmentHover={handleSegmentHover}
+            onSegmentClick={handleSegmentClick}
             onCursorMove={setCursorPos}
             onMapReady={(m) => { mapRef.current = m }}
             speciesFilter={filterSpeciesName}
@@ -65,7 +84,7 @@ export default function App() {
 
         {scrollProgress > 0.8 && (
           <>
-            {hoveredSegment && !selectedSpecies && (
+            {hoveredSegment && !selectedSpecies && !clickedSegment && (
               <FloatingIsland
                 segment={hoveredSegment}
                 demographics={data.demographics}
@@ -80,6 +99,15 @@ export default function App() {
                 segment={selectedSegment}
                 demographics={data.demographics}
                 onClose={() => { setSelectedSpecies(null); setSelectedSegment(null) }}
+              />
+            )}
+
+            {clickedSegment && !selectedSpecies && (
+              <ActionPanel
+                segment={clickedSegment}
+                data={data}
+                onClose={() => setClickedSegment(null)}
+                onAlertClick={handleAlertClick}
               />
             )}
 
