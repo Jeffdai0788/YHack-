@@ -153,7 +153,7 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       tolerance: 0.375,
     })
 
-    // Build point centroids from water-only filtered features
+    // Build point centroids from filtered polygons for heatmap
     const waterPoints = {
       type: 'FeatureCollection',
       features: filteredFeatures.map((feat) => {
@@ -176,60 +176,91 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       100,  UNSAFE_COLOR,
     ]
 
-    // ── Large blurred circles — creates smooth gradient fill on water ─────
-    // Each water-verified point gets a large translucent circle.
-    // Where circles overlap, colors blend into a continuous gradient.
-    // Since all points are on water, the color concentrates on water areas.
+    // Find the first land-like layer to insert heatmap BELOW it
+    // so land naturally masks heatmap bleed at shorelines
+    const styleLayers = m.getStyle().layers
+    const landIdx = styleLayers.findIndex((l) =>
+      l.type === 'fill' && l.id !== 'water' && !l.id.includes('water')
+    )
+    const insertBefore = landIdx > 0 ? styleLayers[landIdx].id : undefined
+
+    // ── Heatmap wash — large radius, inserted below land layers ───────────
+    // This tints water areas with contamination color. Land layers render
+    // on top and mask the bleed, so only water gets colored.
     m.addLayer({
-      id: 'river-glow',
-      type: 'circle',
+      id: 'water-heatmap',
+      type: 'heatmap',
       source: 'water-points',
       paint: {
-        'circle-color': ZONE_COLOR,
-        'circle-radius': [
-          'interpolate', ['linear'], ['zoom'],
-          3,  4,
-          5,  8,
-          7,  16,
-          9,  30,
-          11, 50,
-          13, 80,
+        'heatmap-weight': [
+          'interpolate', ['linear'], ['get', 'pfas_ng_l'],
+          0,    0.05,
+          5,    0.15,
+          20,   0.3,
+          50,   0.5,
+          100,  0.7,
+          500,  1.0,
         ],
-        'circle-opacity': 0.35,
-        'circle-blur': 1,  // max blur — makes circles soft-edged
+        'heatmap-radius': [
+          'interpolate', ['linear'], ['zoom'],
+          3,  15,
+          5,  25,
+          7,  40,
+          9,  60,
+          11, 80,
+        ],
+        'heatmap-intensity': [
+          'interpolate', ['linear'], ['zoom'],
+          3,  0.3,
+          6,  0.5,
+          9,  0.8,
+        ],
+        'heatmap-color': [
+          'interpolate', ['linear'], ['heatmap-density'],
+          0,    'rgba(0,0,0,0)',
+          0.08, 'rgba(0,0,0,0)',
+          0.15, 'rgba(46,184,114,0.25)',
+          0.35, 'rgba(46,184,114,0.40)',
+          0.55, 'rgba(224,160,48,0.50)',
+          0.75, 'rgba(232,132,90,0.60)',
+          0.90, 'rgba(220,68,68,0.70)',
+          1.0,  'rgba(200,40,40,0.80)',
+        ],
+        'heatmap-opacity': 0.75,
       },
-    })
+    }, insertBefore)
 
-    // ── Small solid station dots on top ────────────────────────────────────
+    // ── Filled contamination polygons (on top, always visible) ────────────
     m.addLayer({
       id: 'river-contamination',
-      type: 'circle',
-      source: 'water-points',
+      type: 'fill',
+      source: 'contaminated-rivers',
       paint: {
-        'circle-color': ZONE_COLOR,
-        'circle-radius': [
-          'interpolate', ['linear'], ['zoom'],
-          3,  1.5,
-          7,  3,
-          10, 5,
-          13, 8,
-        ],
-        'circle-opacity': 0.85,
-        'circle-stroke-color': ZONE_COLOR,
-        'circle-stroke-width': 0.5,
-        'circle-stroke-opacity': 0.4,
+        'fill-color': ZONE_COLOR,
+        'fill-opacity': 0.65,
       },
     })
 
-    // ── Invisible large circles for hover/click detection ─────────────────
+    // ── Subtle outline ─────────────────────────────────────────────────────
+    m.addLayer({
+      id: 'river-glow',
+      type: 'line',
+      source: 'contaminated-rivers',
+      paint: {
+        'line-color': ZONE_COLOR,
+        'line-width': 0.5,
+        'line-opacity': 0.4,
+      },
+    })
+
+    // ── Invisible fill for hover/click detection ─────────────────────────
     m.addLayer({
       id: 'river-hit-area',
-      type: 'circle',
-      source: 'water-points',
+      type: 'fill',
+      source: 'contaminated-rivers',
       paint: {
-        'circle-color': 'transparent',
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 8, 8, 20, 12, 35],
-        'circle-opacity': 0,
+        'fill-color': 'transparent',
+        'fill-opacity': 0,
       },
     })
 
