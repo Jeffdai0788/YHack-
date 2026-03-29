@@ -150,15 +150,7 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       100,  UNSAFE_COLOR,
     ]
 
-    // Find the first land/landuse layer — insert our polygons BEFORE it
-    // so land renders ON TOP and naturally clips polygon edges at shorelines
-    const styleLayers = m.getStyle().layers
-    const landLayer = styleLayers.find((l) =>
-      l.id.includes('land') || l.id.includes('landuse') || l.id.includes('landcover')
-    )
-    const insertBeforeId = landLayer?.id
-
-    // ── Filled contamination polygons — inserted below land ────────────────
+    // ── Filled contamination polygons ─────────────────────────────────────
     m.addLayer({
       id: 'river-contamination',
       type: 'fill',
@@ -167,7 +159,7 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
         'fill-color': ZONE_COLOR,
         'fill-opacity': 0.6,
       },
-    }, insertBeforeId)
+    })
 
     // ── Subtle outline ─────────────────────────────────────────────────────
     m.addLayer({
@@ -177,9 +169,9 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       paint: {
         'line-color': ZONE_COLOR,
         'line-width': 0.5,
-        'line-opacity': 0.3,
+        'line-opacity': 0.4,
       },
-    }, insertBeforeId)
+    })
 
     // ── Invisible fill for hover/click detection ─────────────────────────
     m.addLayer({
