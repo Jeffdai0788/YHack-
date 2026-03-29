@@ -138,7 +138,7 @@ export default function Hero({ scrollProgress }) {
             '0 0  90px rgba(240,100,20,0.20)',
           ].join(', '),
         }}>
-          TrophicTrace
+          Downstream
         </h1>
 
         {/* Divider */}

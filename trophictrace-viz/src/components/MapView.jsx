@@ -5,10 +5,12 @@ import { ENV_CENTERS } from '../data/envCenters'
 
 mapboxgl.accessToken = 'pk.eyJ1IjoiamQxMjM0NTYiLCJhIjoiY21uYXR1dzdwMG43dTJwcHI0d2ltdXRzbCJ9.3tN6tOw4eqy-YGeGdU1Uhg'
 
-const SAFE_COLOR = '#2EB872'
-const LIMITED_COLOR = '#E0A030'
-const MODERATE_COLOR = '#E8845A'
-const UNSAFE_COLOR = '#DC4444'
+// New thresholds: ≤20 low (safe), 20-60 caution, 60-250 high, 250+ critical
+const SAFE_COLOR = '#2EB872'      // ≤20 ppb
+const LIMITED_COLOR = '#E0A030'    // 20-60 ppb (caution)
+const MODERATE_COLOR = '#E8845A'   // 60-150 ppb (high)
+const UNSAFE_COLOR = '#DC4444'     // 150-250 ppb
+const CRITICAL_COLOR = '#B91C1C'   // 250+ ppb
 
 // Slight blue tint for water bodies
 const WATER_TINT = '#4A90D9'
@@ -23,11 +25,14 @@ const VIZ_LAYERS = [
   'river-hit-area',
 ]
 
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
 export default function MapView({ data, onSegmentHover, onSegmentClick, onCursorMove, onMapReady, speciesFilter }) {
   const mapContainer = useRef(null)
   const map = useRef(null)
+  const filteredFeaturesRef = useRef(null) // store water-filtered features
   const [loaded, setLoaded] = useState(false)
-
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()) // default to current month
   useEffect(() => {
     if (map.current) return
     const observer = new IntersectionObserver(
@@ -39,6 +44,46 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
     observer.observe(mapContainer.current)
     return () => { observer.disconnect(); if (map.current) map.current.remove() }
   }, [])
+
+  // Month slider — update GeoJSON with monthly PFAS (includes Great Lakes decline baked in)
+  useEffect(() => {
+    if (!map.current || !loaded || !filteredFeaturesRef.current) return
+    const m = map.current
+
+    const updatedFeatures = filteredFeaturesRef.current.map((feat) => {
+      const monthly = feat.properties.monthly_pfas_ng_l
+      const monthVal = (monthly && monthly[selectedMonth] != null) ? monthly[selectedMonth] : feat.properties.water_pfas_ng_l
+      return {
+        ...feat,
+        properties: { ...feat.properties, water_pfas_ng_l: monthVal },
+      }
+    })
+    const updatedGeo = { type: 'FeatureCollection', features: updatedFeatures }
+
+    // Update both sources
+    const riverSrc = m.getSource('contaminated-rivers')
+    const pointSrc = m.getSource('water-points')
+    if (riverSrc) riverSrc.setData(updatedGeo)
+    if (pointSrc) {
+      const waterPoints = {
+        type: 'FeatureCollection',
+        features: updatedFeatures.map((feat) => {
+          const coords = feat.geometry.type === 'Polygon'
+            ? feat.geometry.coordinates[0]
+            : feat.geometry.coordinates
+          const n = coords.length
+          const cx = coords.reduce((s, c) => s + c[0], 0) / n
+          const cy = coords.reduce((s, c) => s + c[1], 0) / n
+          return {
+            type: 'Feature',
+            properties: feat.properties,
+            geometry: { type: 'Point', coordinates: [cx, cy] },
+          }
+        }),
+      }
+      pointSrc.setData(waterPoints)
+    }
+  }, [selectedMonth, loaded])
 
   // Species filter — filter river segments to only show where that species lives
   useEffect(() => {
@@ -94,6 +139,17 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       { id: 'flint_river',        lat: 43.01, lng: -83.69 },
       { id: 'fox_river',          lat: 44.5,  lng: -88.0 },
       { id: 'dakotas',            lat: 45.5,  lng: -99.0 },
+      // West Coast
+      { id: 'columbia_river',     lat: 45.60, lng: -122.68 },
+      { id: 'puget_sound',        lat: 47.58, lng: -122.33 },
+      { id: 'sacramento_river',   lat: 38.56, lng: -121.46 },
+      { id: 'sf_bay',             lat: 37.76, lng: -122.34 },
+      { id: 'la_river',           lat: 34.04, lng: -118.20 },
+      { id: 'san_diego',          lat: 32.70, lng: -117.16 },
+      { id: 'colorado_river',     lat: 33.41, lng: -114.56 },
+      { id: 'salt_river',         lat: 33.44, lng: -111.90 },
+      // Florida airports
+      { id: 'florida_airports',   lat: 28.43, lng: -81.30 },
     ]
     let minDist = Infinity
     let nearest = null
@@ -128,8 +184,8 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/dark-v11',
-      center: [-83, 38],
-      zoom: 4.2,
+      center: [-96, 38],
+      zoom: 3.8,
       minZoom: 3,
       maxZoom: 14,
       attributionControl: false,
@@ -205,6 +261,9 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
 
     console.log(`Water filter: ${filteredFeatures.length}/${riverGeo.features.length} features on water`)
 
+    // Store filtered features so the month slider doesn't re-inject unfiltered ones
+    filteredFeaturesRef.current = filteredFeatures
+
     const filteredGeo = { type: 'FeatureCollection', features: filteredFeatures }
 
     // ── 2. GeoJSON sources ──
@@ -233,15 +292,15 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
     }
     m.addSource('water-points', { type: 'geojson', data: waterPoints })
 
-    // ── 3. Shared color expression — new thresholds: ≤4 safe, 4–10 mod, 10+ high, 70+ critical ──
+    // ── 3. Shared color expression — new thresholds: ≤20 safe, 20–60 caution, 60–250 high, 250+ critical ──
     const ZONE_COLOR = [
       'interpolate', ['linear'], ['get', 'water_pfas_ng_l'],
       0,   SAFE_COLOR,
-      4,   SAFE_COLOR,
-      7,   LIMITED_COLOR,
-      10,  MODERATE_COLOR,
-      40,  UNSAFE_COLOR,
-      70,  '#B91C1C',       // critical — deep red
+      20,  SAFE_COLOR,
+      35,  LIMITED_COLOR,
+      60,  MODERATE_COLOR,
+      150, UNSAFE_COLOR,
+      250, CRITICAL_COLOR,
     ]
 
     // ── 4. Layer insertion point — right above built-in water layer ──
@@ -324,16 +383,17 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       type: 'heatmap',
       source: 'water-points',
       paint: {
-        // Weight calibrated so typical 3–6 ng/L = low heat, only 10+ drives medium, 50+ drives high
+        // Weight calibrated: ≤20 = low heat, 60+ medium, 250+ high
         'heatmap-weight': [
           'interpolate', ['linear'], ['get', 'water_pfas_ng_l'],
           0,   0.02,
-          2,   0.06,
-          4,   0.12,
-          8,   0.25,
-          15,  0.50,
-          40,  0.80,
-          80,  1.0,
+          10,  0.06,
+          20,  0.12,
+          40,  0.25,
+          60,  0.40,
+          120, 0.65,
+          250, 0.85,
+          500, 1.0,
         ],
         'heatmap-radius': [
           'interpolate', ['exponential', 1.6], ['zoom'],
@@ -531,12 +591,51 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
         background: 'linear-gradient(to bottom, rgba(25,25,25,0.8) 0%, transparent 100%)',
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem' }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.125rem', fontWeight: 500, color: 'var(--text-primary)' }}>TrophicTrace</span>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.125rem', fontWeight: 500, color: 'var(--text-primary)' }}>Downstream</span>
           <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>National PFAS Risk Map</span>
         </div>
       </div>
 
       <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
+
+      {/* Time slider */}
+      <div style={{
+        position: 'absolute', bottom: '2rem', right: '4rem', zIndex: 10,
+        background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px',
+        padding: '0.75rem 1rem', fontFamily: 'var(--font-body)', fontSize: '0.75rem',
+        minWidth: '220px',
+      }}>
+        <div style={{ color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '0.5rem', fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Seasonal View</span>
+          <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '0.8125rem', textTransform: 'none', letterSpacing: 0 }}>{MONTH_NAMES[selectedMonth]} 2025</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={11}
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+          style={{
+            width: '100%',
+            height: '4px',
+            appearance: 'none',
+            WebkitAppearance: 'none',
+            background: `linear-gradient(to right,
+              rgba(46,184,114,0.4) 0%,
+              rgba(46,184,114,0.6) 25%,
+              rgba(224,160,38,0.6) 50%,
+              rgba(224,160,38,0.6) 75%,
+              rgba(46,184,114,0.4) 100%)`,
+            borderRadius: '2px',
+            outline: 'none',
+            cursor: 'pointer',
+            marginBottom: '0.25rem',
+          }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-tertiary)', fontSize: '0.5625rem', fontFamily: 'var(--font-mono)' }}>
+          <span>Jan</span><span>Apr</span><span>Jul</span><span>Oct</span><span>Dec</span>
+        </div>
+      </div>
 
       {/* Legend — gradient bar */}
       <div style={{
@@ -545,18 +644,18 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
         padding: '0.875rem 1.125rem', fontFamily: 'var(--font-body)', fontSize: '0.75rem',
       }}>
         <div style={{ color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '0.625rem', fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Water PFAS Contamination (ng/L)
+          Fish Tissue PFAS (ppb)
         </div>
         <div style={{
           height: '8px', borderRadius: '4px', marginBottom: '0.4rem',
-          background: `linear-gradient(to right, ${SAFE_COLOR}, ${SAFE_COLOR} 15%, ${LIMITED_COLOR} 35%, ${MODERATE_COLOR} 55%, ${UNSAFE_COLOR} 80%, #B91C1C)`,
+          background: `linear-gradient(to right, ${SAFE_COLOR}, ${SAFE_COLOR} 12%, ${LIMITED_COLOR} 30%, ${MODERATE_COLOR} 50%, ${UNSAFE_COLOR} 75%, ${CRITICAL_COLOR})`,
           opacity: 0.88,
         }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-tertiary)', fontSize: '0.6rem', fontFamily: 'var(--font-mono)', marginBottom: '0.25rem' }}>
-          <span>0</span><span>4</span><span>7</span><span>10</span><span>40</span><span>70+</span>
+          <span>0</span><span>20</span><span>60</span><span>150</span><span>250+</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-tertiary)', fontSize: '0.6rem' }}>
-          <span>Safe</span><span></span><span>Moderate</span><span>High</span><span></span><span>Critical</span>
+          <span>Safe</span><span>Caution</span><span>High</span><span></span><span>Critical</span>
         </div>
         {/* Water tint indicator */}
         <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>

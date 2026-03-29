@@ -1,17 +1,40 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Sparkles } from 'lucide-react'
-import { askAI } from '../utils/openai'
+import { Sparkles, Send, X } from 'lucide-react'
+import { answerQuery } from '../utils/chatEngine'
+
+// Simple markdown-ish renderer for bold and newlines
+function renderMarkdown(text) {
+  if (!text) return null
+  const parts = text.split('\n')
+  return parts.map((line, i) => {
+    // Bold: **text**
+    const segments = line.split(/(\*\*[^*]+\*\*)/)
+    const rendered = segments.map((seg, j) => {
+      if (seg.startsWith('**') && seg.endsWith('**')) {
+        return <strong key={j} style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{seg.slice(2, -2)}</strong>
+      }
+      return seg
+    })
+    return (
+      <span key={i}>
+        {i > 0 && <br />}
+        {rendered}
+      </span>
+    )
+  })
+}
 
 export default function AIChatPrompt({ data, hoveredSegment }) {
   const [proximity, setProximity] = useState(0)
   const [isHovered, setIsHovered] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [query, setQuery] = useState('')
-  const [response, setResponse] = useState(null)
+  const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
   const buttonRef = useRef(null)
   const inputRef = useRef(null)
   const containerRef = useRef(null)
+  const messagesEndRef = useRef(null)
 
   // Track mouse proximity to button
   useEffect(() => {
@@ -35,6 +58,13 @@ export default function AIChatPrompt({ data, hoveredSegment }) {
     }
   }, [isExpanded])
 
+  // Scroll to bottom on new message
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages])
+
   // Click outside to collapse
   useEffect(() => {
     if (!isExpanded) return
@@ -48,32 +78,18 @@ export default function AIChatPrompt({ data, hoveredSegment }) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [isExpanded])
 
-  const buildContext = useCallback(() => {
-    return {
-      segments: data.segments.map((s) => ({
-        name: s.name,
-        water_pfas_ng_l: s.predicted_water_pfas_ng_l,
-        confidence: s.prediction_confidence,
-        species: s.species.map((sp) => ({
-          name: sp.common_name,
-          tissue_pfas_ng_g: sp.tissue_total_pfas_ng_g,
-          status: sp.safety_status_recreational,
-          servings_per_month: sp.safe_servings_per_month_recreational,
-        })),
-      })),
-      hovered_segment: hoveredSegment?.name || null,
-    }
-  }, [data, hoveredSegment])
-
   const handleSubmit = async () => {
     if (!query.trim() || loading) return
+    const userQuery = query.trim()
+    setQuery('')
+    setMessages(prev => [...prev, { role: 'user', text: userQuery }])
     setLoading(true)
-    setResponse(null)
+
     try {
-      const result = await askAI(query.trim(), buildContext())
-      setResponse(result)
+      const answer = await answerQuery(userQuery, data)
+      setMessages(prev => [...prev, { role: 'assistant', text: answer }])
     } catch (err) {
-      setResponse(`Error: ${err.message}`)
+      setMessages(prev => [...prev, { role: 'assistant', text: `Sorry, something went wrong: ${err.message}` }])
     } finally {
       setLoading(false)
     }
@@ -100,31 +116,63 @@ export default function AIChatPrompt({ data, hoveredSegment }) {
         gap: '0.5rem',
       }}
     >
-      {/* Response card */}
-      {response && (
+      {/* Chat panel */}
+      {isExpanded && messages.length > 0 && (
         <div
           style={{
-            width: '420px',
-            maxHeight: '240px',
+            width: '460px',
+            maxHeight: '340px',
             overflowY: 'auto',
             background: 'var(--bg-surface)',
             border: '1px solid var(--border)',
             borderRadius: '12px',
-            padding: '1rem',
-            fontSize: '0.8125rem',
-            fontFamily: 'var(--font-body)',
-            color: 'var(--text-primary)',
-            lineHeight: 1.6,
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
-            animation: 'islandEnter 200ms ease-out',
+            padding: '0.75rem',
+            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
+            animation: 'chatEnter 200ms ease-out',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
           }}
         >
-          <style>{`@keyframes islandEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-          {response}
+          <style>{`@keyframes chatEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              style={{
+                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: '90%',
+                background: msg.role === 'user' ? 'rgba(46,184,114,0.12)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${msg.role === 'user' ? 'rgba(46,184,114,0.2)' : 'var(--border)'}`,
+                borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                padding: '0.625rem 0.875rem',
+                fontSize: '0.8125rem',
+                fontFamily: 'var(--font-body)',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.55,
+              }}
+            >
+              {msg.role === 'assistant' ? renderMarkdown(msg.text) : msg.text}
+            </div>
+          ))}
+
+          {loading && (
+            <div style={{
+              alignSelf: 'flex-start',
+              padding: '0.5rem 0.75rem',
+              fontSize: '0.75rem',
+              color: 'var(--text-tertiary)',
+              fontStyle: 'italic',
+            }}>
+              Thinking...
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
         </div>
       )}
 
-      {/* Button / Search bar */}
+      {/* Input bar */}
       <div
         ref={buttonRef}
         onMouseEnter={() => {
@@ -135,7 +183,7 @@ export default function AIChatPrompt({ data, hoveredSegment }) {
           if (!isExpanded) setIsHovered(false)
         }}
         style={{
-          width: isExpanded ? '420px' : '48px',
+          width: isExpanded ? '460px' : '48px',
           height: '48px',
           borderRadius: '24px',
           background: 'var(--bg-surface)',
@@ -170,25 +218,69 @@ export default function AIChatPrompt({ data, hoveredSegment }) {
 
         {/* Input */}
         {isExpanded && (
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSubmit()
-            }}
-            placeholder="Ask about this watershed..."
-            style={{
-              flex: 1,
-              background: 'none',
-              border: 'none',
-              outline: 'none',
-              color: 'var(--text-primary)',
-              fontFamily: 'var(--font-body)',
-              fontSize: '0.875rem',
-              paddingRight: '1rem',
-            }}
-          />
+          <>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSubmit()
+              }}
+              placeholder={messages.length === 0 ? 'Ask about PFAS levels, fish safety, locations...' : 'Ask a follow-up...'}
+              style={{
+                flex: 1,
+                background: 'none',
+                border: 'none',
+                outline: 'none',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-body)',
+                fontSize: '0.875rem',
+              }}
+            />
+            {query.trim() && (
+              <button
+                onClick={handleSubmit}
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  marginRight: '6px',
+                  borderRadius: '50%',
+                  background: 'rgba(46,184,114,0.15)',
+                  border: '1px solid rgba(46,184,114,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#2EB872',
+                  flexShrink: 0,
+                }}
+              >
+                <Send size={14} strokeWidth={2} />
+              </button>
+            )}
+            {messages.length > 0 && !query.trim() && (
+              <button
+                onClick={() => { setMessages([]); setQuery('') }}
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  marginRight: '6px',
+                  borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: 'var(--text-tertiary)',
+                  flexShrink: 0,
+                }}
+                title="Clear chat"
+              >
+                <X size={14} strokeWidth={2} />
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
