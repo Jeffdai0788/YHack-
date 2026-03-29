@@ -34,7 +34,7 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
     if (!map.current || !loaded) return
 
     if (!speciesFilter) {
-      ;['river-contamination', 'river-glow', 'river-hit-area'].forEach((id) => {
+      ;['river-plume', 'river-contamination', 'river-hit-area'].forEach((id) => {
         if (map.current.getLayer(id)) map.current.setFilter(id, null)
       })
       return
@@ -54,7 +54,7 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
       ? ['in', ['get', 'hotspot_id'], ['literal', [...matchingHotspots]]]
       : ['==', ['get', 'hotspot_id'], '__none__']
 
-    ;['river-contamination', 'river-glow', 'river-hit-area'].forEach((id) => {
+    ;['river-plume', 'river-contamination', 'river-hit-area'].forEach((id) => {
       if (map.current.getLayer(id)) map.current.setFilter(id, filter)
     })
   }, [speciesFilter, loaded, data])
@@ -126,51 +126,109 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
     }
   }
 
-  // --- River contamination layers ---
+  // --- Contamination plume + flow layers ---
+
+  // Extract midpoint of each LineString as a weighted Point for the heatmap
+  function buildPlumePoints() {
+    return {
+      type: 'FeatureCollection',
+      features: riverGeo.features.map((feat) => {
+        const coords = feat.geometry.coordinates
+        const mid = coords[Math.floor(coords.length / 2)]
+        return { type: 'Feature', properties: feat.properties, geometry: { type: 'Point', coordinates: mid } }
+      }),
+    }
+  }
 
   function addRiverLayers() {
     const m = map.current
 
+    // Source for line hover hit-area + flow centerline
     m.addSource('contaminated-rivers', {
       type: 'geojson',
       data: riverGeo,
       tolerance: 0.375,
     })
 
-    // Discrete color step — each zone is a pure flat color, no blending between zones
-    const ZONE_COLOR = [
-      'step', ['get', 'pfas_ng_l'],
-      SAFE_COLOR,      // < 150  → green
-      150, LIMITED_COLOR,   // 150–499 → amber
-      500, MODERATE_COLOR,  // 500–899 → orange
-      900, UNSAFE_COLOR,    // ≥ 900   → red
-    ]
-
-    // Glow underlay — narrow blur so color doesn't spill into adjacent zones
-    m.addLayer({
-      id: 'river-glow',
-      type: 'line',
-      source: 'contaminated-rivers',
-      paint: {
-        'line-color': ZONE_COLOR,
-        'line-width': [
-          'interpolate', ['exponential', 1.5], ['zoom'],
-          4, ['step', ['get', 'pfas_ng_l'], 3, 150, 5, 500, 7, 900, 9],
-          8, ['step', ['get', 'pfas_ng_l'], 6, 150, 10, 500, 14, 900, 18],
-          12, ['step', ['get', 'pfas_ng_l'], 10, 150, 16, 500, 22, 900, 28],
-        ],
-        'line-blur': [
-          'interpolate', ['linear'], ['zoom'],
-          4, 1.5,
-          8, 2.5,
-          12, 4,
-        ],
-        'line-opacity': 0.18,
-      },
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
+    // Source for heatmap blobs (points at LineString midpoints)
+    m.addSource('plume-points', {
+      type: 'geojson',
+      data: buildPlumePoints(),
     })
 
-    // Main contamination line — solid discrete color per zone
+    // Insert heatmap BELOW the first road layer so roads/buildings on land
+    // naturally render on top of it, limiting visible bleed over developed land
+    const styleLayers = m.getStyle().layers
+    const firstRoadLayer = styleLayers.find((l) => l.id.startsWith('road-') || l.id === 'road')
+    const beforeRoadId = firstRoadLayer?.id
+
+    // ── Radiating plume blobs ───────────────────────────────────────────────
+    m.addLayer({
+      id: 'river-plume',
+      type: 'heatmap',
+      source: 'plume-points',
+      paint: {
+        // Weight each point by its PFAS level so high-contamination sources
+        // accumulate higher density → warmer color
+        'heatmap-weight': [
+          'interpolate', ['linear'], ['get', 'pfas_ng_l'],
+          0,    0,
+          150,  0.22,
+          500,  0.55,
+          900,  0.80,
+          1200, 1.0,
+        ],
+        // Radius: large enough so adjacent river-segment points merge into one
+        // continuous organic blob; shrinks at high zoom where detail takes over
+        'heatmap-radius': [
+          'interpolate', ['linear'], ['zoom'],
+          3,  10,
+          5,  20,
+          7,  32,
+          9,  50,
+          11, 68,
+          13, 90,
+        ],
+        // Intensity: controls how quickly density accumulates in overlapping areas
+        'heatmap-intensity': [
+          'interpolate', ['linear'], ['zoom'],
+          3,  0.4,
+          6,  0.8,
+          9,  1.5,
+          13, 3.0,
+        ],
+        // Color ramp: transparent at edges → safe green → amber → orange → red at core
+        'heatmap-color': [
+          'interpolate', ['linear'], ['heatmap-density'],
+          0,    'rgba(0,0,0,0)',
+          0.05, 'rgba(0,0,0,0)',
+          0.15, `rgba(46,184,114,0.45)`,
+          0.35, `rgba(46,184,114,0.72)`,
+          0.50, `rgba(224,160,48,0.80)`,
+          0.68, `rgba(232,132,90,0.88)`,
+          0.85, `rgba(220,68,68,0.92)`,
+          1.0,  `rgba(200,40,40,0.97)`,
+        ],
+        // Fade slightly at very high zoom — the thin centerline takes over
+        'heatmap-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          3,  0.80,
+          8,  0.88,
+          11, 0.75,
+          14, 0.45,
+        ],
+      },
+    }, beforeRoadId)
+
+    // ── Thin flow centerline (subtle reference path) ────────────────────────
+    const ZONE_COLOR = [
+      'step', ['get', 'pfas_ng_l'],
+      SAFE_COLOR,
+      150, LIMITED_COLOR,
+      500, MODERATE_COLOR,
+      900, UNSAFE_COLOR,
+    ]
+
     m.addLayer({
       id: 'river-contamination',
       type: 'line',
@@ -179,47 +237,37 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
         'line-color': ZONE_COLOR,
         'line-width': [
           'interpolate', ['exponential', 1.5], ['zoom'],
-          4, ['step', ['get', 'pfas_ng_l'], 0.8, 150, 1.2, 500, 1.8, 900, 2.5],
-          8, ['step', ['get', 'pfas_ng_l'], 2,   150, 3,   500, 5,   900, 7],
-          12, ['step', ['get', 'pfas_ng_l'], 3,  150, 5,   500, 8,   900, 12],
-          14, ['step', ['get', 'pfas_ng_l'], 4,  150, 7,   500, 11,  900, 18],
+          4,  0.3,
+          8,  0.7,
+          12, 1.5,
+          14, 2.5,
         ],
         'line-opacity': [
-          'step', ['get', 'pfas_ng_l'],
-          0.45,       // safe
-          150, 0.60,  // limited
-          500, 0.75,  // moderate
-          900, 0.88,  // unsafe
+          'interpolate', ['linear'], ['zoom'],
+          4,  0.0,
+          7,  0.25,
+          11, 0.50,
+          14, 0.70,
         ],
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     })
 
-    // Invisible wide hit area for hover detection
+    // ── Invisible wide hit area for hover detection ─────────────────────────
     m.addLayer({
       id: 'river-hit-area',
       type: 'line',
       source: 'contaminated-rivers',
       paint: {
         'line-color': 'transparent',
-        'line-width': [
-          'interpolate', ['linear'], ['zoom'],
-          4, 12,
-          8, 20,
-          12, 30,
-        ],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 4, 12, 8, 20, 12, 30],
         'line-opacity': 0,
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     })
 
-    // Hover interaction
     m.on('mousemove', 'river-hit-area', (e) => {
       m.getCanvas().style.cursor = 'none'
-      const props = e.features[0].properties
-      const hotspotId = props.hotspot_id
-
-      // Find the nearest data segment from nationalResults
       const point = e.lngLat
       let nearest = null
       let minDist = Infinity
@@ -227,7 +275,6 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
         const d = Math.hypot(seg.latitude - point.lat, seg.longitude - point.lng)
         if (d < minDist) { minDist = d; nearest = seg }
       }
-
       if (nearest && minDist < 0.5) {
         onSegmentHover(nearest, e)
         onCursorMove({ x: e.point.x, y: e.point.y })
@@ -284,20 +331,17 @@ export default function MapView({ data, onSegmentHover, onCursorMove, onMapReady
         <div style={{ color: 'var(--text-secondary)', fontWeight: 500, marginBottom: '0.625rem', fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Water PFAS Contamination (ng/L)
         </div>
-        {/* Discrete zone swatches */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          {[
-            { color: SAFE_COLOR,     label: '< 150 ng/L',  zone: 'Safe' },
-            { color: LIMITED_COLOR,  label: '150–499',     zone: 'Limited' },
-            { color: MODERATE_COLOR, label: '500–899',     zone: 'Moderate' },
-            { color: UNSAFE_COLOR,   label: '≥ 900',       zone: 'Unsafe' },
-          ].map(({ color, label, zone }) => (
-            <div key={zone} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '28px', height: '6px', borderRadius: '3px', background: color, opacity: 0.88, flexShrink: 0 }} />
-              <span style={{ color: 'var(--text-secondary)', fontSize: '0.6875rem' }}>{zone}</span>
-              <span style={{ color: 'var(--text-tertiary)', fontSize: '0.625rem', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{label}</span>
-            </div>
-          ))}
+        {/* Plume gradient bar */}
+        <div style={{
+          height: '8px', borderRadius: '4px', marginBottom: '0.4rem',
+          background: `linear-gradient(to right, ${SAFE_COLOR}, ${LIMITED_COLOR}, ${MODERATE_COLOR}, ${UNSAFE_COLOR})`,
+          opacity: 0.88,
+        }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-tertiary)', fontSize: '0.6rem', fontFamily: 'var(--font-mono)', marginBottom: '0.25rem' }}>
+          <span>0</span><span>150</span><span>500</span><span>900+</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-tertiary)', fontSize: '0.6rem' }}>
+          <span>Safe</span><span>Limited</span><span>Moderate</span><span>Unsafe</span>
         </div>
         {/* Water tint indicator */}
         <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
