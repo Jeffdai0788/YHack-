@@ -15,12 +15,16 @@ Three-stage ML pipeline: water contamination screening → fish tissue bioaccumu
                                                         ↓
                                               inference.py (Stage 3: Hazard Quotient)
                                                         ↓
-                                              national_results.json (4.3 MB)
+                                              national_results.json (23.9 MB, 2328 segments)
                                                         ↓
                                          build_monthly_timeseries.py
                                          (embeds real WQP monthly data)
                                                         ↓
-                                              national_results.json → frontend
+                                         sync_to_frontend.py
+                                         (schema transform + 946 water body points)
+                                                        ↓
+                                    trophictrace-viz/src/data/nationalResults.json (21.3 MB, 3274 segments)
+                                    trophictrace-viz/src/data/riverGeometry.json   (1.2 MB, 3274 features)
 ```
 
 ---
@@ -258,10 +262,16 @@ Measured months always hit their exact average values. Each segment in the outpu
 |------|------|--------|
 | build_training_data.py | ~3s | training_data_real.csv (2,131 rows) |
 | train_xgboost.py | ~0.2s | gbr_model.joblib, training_metrics.json |
-| train PINN (if needed) | ~120s | pinn_best.pt, pinn_model_info.json |
-| inference.py | ~54s | national_results.json (4.3 MB) |
+| retrain_pinn.py (if needed) | ~120s | pinn_best.pt, pinn_model_info.json |
+| inference.py | ~54s | national_results.json (23.9 MB, 2,328 segments) |
 | build_monthly_timeseries.py | ~3s | monthly_timeseries.json + embeds in results |
-| **Total** | **~60s** (without PINN retrain) | |
+| sync_to_frontend.py | ~5s | nationalResults.json (21.3 MB, 3,274 segs) + riverGeometry.json (1.2 MB) |
+| **Total** | **~65s** (without PINN retrain) | |
+
+### Data point counts
+- 2,328 segments from real WQP stations (inference pipeline)
+- 946 water body surface points from polygon grids (14 major US water bodies)
+- **3,274 total map features** in frontend data
 
 ---
 
@@ -287,14 +297,15 @@ backend/monthly_timeseries.json  (393 KB)   — 905 stations, raw WQP data
 From the `backend/` directory:
 
 ```bash
-python3 build_training_data.py      # rebuild training CSV from raw WQP data
+python3 build_training_data.py      # rebuild training CSV from raw WQP data (~3s)
 python3 train_xgboost.py            # retrain Stage 1 model (~0.2s)
-# python3 pinn_bioaccumulation.py   # retrain PINN (~2min, only if you changed it)
-python3 inference.py                # run full 3-stage pipeline → national_results.json
-python3 build_monthly_timeseries.py # build timeseries + embed into national_results.json
+# python3 retrain_pinn.py           # retrain PINN (~2min, only if you changed it)
+python3 inference.py                # run full 3-stage pipeline → national_results.json (~54s)
+python3 build_monthly_timeseries.py # build timeseries + embed into national_results.json (~3s)
+python3 sync_to_frontend.py         # schema transform + water body points → frontend data files
 ```
 
-Then copy `national_results.json` to the frontend.
+`sync_to_frontend.py` writes directly to `trophictrace-viz/src/data/` — no manual copy needed.
 
 ### Key fields the frontend should use
 
