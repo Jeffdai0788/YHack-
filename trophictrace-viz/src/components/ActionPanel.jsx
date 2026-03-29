@@ -29,7 +29,7 @@ const FEATURE_LABELS = {
 }
 
 const TIER = (pfas) =>
-  pfas >= 500 ? 'critical' : pfas >= 200 ? 'warning' : pfas >= 50 ? 'caution' : 'safe'
+  pfas >= 70 ? 'critical' : pfas >= 10 ? 'warning' : pfas > 4 ? 'caution' : 'safe'
 
 const TIER_CFG = {
   critical: { label: 'CRITICAL', color: '#EF4444', bg: 'rgba(239,68,68,0.10)',  action: 'Do not consume fish. Contact state PFAS response team immediately.' },
@@ -116,7 +116,7 @@ function ReportTab({ segment, allData }) {
     (a, b) => b.tissue_total_pfas_ng_g - a.tissue_total_pfas_ng_g
   )
 
-  const factors = segment.top_contributing_features?.slice(0, 5) ?? []
+  const factors = [...(segment.top_contributing_features ?? [])].sort((a, b) => b.importance - a.importance).slice(0, 5)
   const maxImp  = factors.length ? Math.max(...factors.map(f => f.importance)) : 1
 
   // Demographic context
@@ -291,7 +291,7 @@ function AlertsTab({ allData, onAlertClick }) {
 
   const alerts = useMemo(() => {
     return allData.segments
-      .filter(seg => seg.predicted_water_pfas_ng_l >= 100 || seg.risk_level === 'high' || seg.risk_level === 'critical')
+      .filter(seg => seg.predicted_water_pfas_ng_l >= 10 || seg.risk_level === 'high' || seg.risk_level === 'critical')
       .map(seg => {
         const pfas = seg.predicted_water_pfas_ng_l
         const tier = TIER(pfas)
