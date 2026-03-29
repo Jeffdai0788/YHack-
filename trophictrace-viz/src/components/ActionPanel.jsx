@@ -4,20 +4,28 @@ import { ENV_CENTERS, nearestCenter } from '../data/envCenters'
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const FEATURE_LABELS = {
-  nearest_pfas_facility_km:  'Proximity to PFAS facility',
-  upstream_npdes_pfas_count: 'Upstream PFAS dischargers',
-  low_flow_7q10_m3s:         'Low-flow conditions',
-  pct_urban:                 'Urban land use',
-  dissolved_organic_carbon_mgl: 'Dissolved organic carbon',
-  mean_annual_flow_m3s:      'River flow rate',
-  afff_site_nearby:          'Nearby AFFF site',
-  wwtp_upstream:             'Upstream wastewater plant',
-  pfas_industry_density:     'PFAS industry density',
-  stream_order:              'Stream order',
-  baseflow_index:            'Baseflow index',
-  pct_agriculture:           'Agricultural land use',
-  pct_impervious:            'Impervious surface',
-  population_density:        'Population density',
+  nearest_pfas_facility_km:    'Proximity to PFAS facility',
+  upstream_npdes_pfas_count:   'Upstream PFAS dischargers',
+  upstream_pfas_facility_count:'Upstream PFAS facilities',
+  low_flow_7q10_m3s:           'Low-flow conditions',
+  pct_urban:                   'Urban land use',
+  dissolved_organic_carbon_mgl:'Dissolved organic carbon',
+  mean_annual_flow_m3s:        'River flow rate',
+  afff_site_nearby:            'Nearby AFFF site',
+  wwtp_upstream:               'Upstream wastewater plant',
+  pfas_industry_density:       'PFAS industry density',
+  stream_order:                'Stream order',
+  baseflow_index:              'Baseflow index',
+  pct_agriculture:             'Agricultural land use',
+  pct_impervious:              'Impervious surface',
+  population_density:          'Population density',
+  inv_facility_dist:           'Inverse facility distance',
+  log_facility_dist:           'Log facility distance',
+  facility_flow_ratio:         'Contamination load / dilution',
+  latitude:                    'Latitude',
+  longitude:                   'Longitude',
+  month:                       'Sampling month',
+  watershed_area_km2:          'Watershed area',
 }
 
 const TIER = (pfas) =>
@@ -283,7 +291,7 @@ function AlertsTab({ allData, onAlertClick }) {
 
   const alerts = useMemo(() => {
     return allData.segments
-      .filter(seg => seg.predicted_water_pfas_ng_l >= 100 || seg.risk_level === 'high')
+      .filter(seg => seg.predicted_water_pfas_ng_l >= 100 || seg.risk_level === 'high' || seg.risk_level === 'critical')
       .map(seg => {
         const pfas = seg.predicted_water_pfas_ng_l
         const tier = TIER(pfas)

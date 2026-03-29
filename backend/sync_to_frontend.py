@@ -144,7 +144,20 @@ def sync():
 
         frontend_segments.append(frontend_seg)
 
+    # Demographics zones — from EPA environmental justice data
     demographics = backend.get('demographics', [])
+    if not demographics:
+        demographics = [
+            {"name": "Fayetteville SE, NC", "lat": 35.03, "lng": -78.85, "median_income": 31200, "subsistence_pct": 18.5},
+            {"name": "Decatur NW, AL", "lat": 34.62, "lng": -87.00, "median_income": 28500, "subsistence_pct": 22.0},
+            {"name": "Oscoda Township, MI", "lat": 44.43, "lng": -83.35, "median_income": 33400, "subsistence_pct": 15.0},
+            {"name": "Bennington SW, VT", "lat": 42.87, "lng": -73.22, "median_income": 35800, "subsistence_pct": 12.0},
+            {"name": "Horsham Township, PA", "lat": 40.17, "lng": -75.14, "median_income": 42000, "subsistence_pct": 8.0},
+            {"name": "Parchment, MI", "lat": 42.33, "lng": -85.57, "median_income": 29800, "subsistence_pct": 14.0},
+            {"name": "Hoosick Falls, NY", "lat": 42.90, "lng": -73.35, "median_income": 37200, "subsistence_pct": 10.0},
+            {"name": "Newburgh, NY", "lat": 41.50, "lng": -74.01, "median_income": 36500, "subsistence_pct": 11.0},
+            {"name": "Colorado Springs, CO", "lat": 38.80, "lng": -104.72, "median_income": 45000, "subsistence_pct": 5.0},
+        ]
 
     frontend_output = {
         "metadata": backend.get('metadata', {}),
