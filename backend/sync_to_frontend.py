@@ -322,15 +322,16 @@ def sync():
             n_interp = rng.randint(3, 6)
             for t_idx in range(n_interp):
                 t = (t_idx + 0.5) / n_interp
-                lat = lat1 + t * (lat2 - lat1) + rng.uniform(-0.05, 0.05)
-                lng = lng1 + t * (lng2 - lng1) + rng.uniform(-0.05, 0.05)
+                # Minimal jitter — stay close to the river centerline
+                lat = lat1 + t * (lat2 - lat1) + rng.uniform(-0.005, 0.005)
+                lng = lng1 + t * (lng2 - lng1) + rng.uniform(-0.005, 0.005)
                 pfas = round(rng.uniform(pfas_lo, pfas_hi), 1)
                 risk = risk_from_pfas(pfas)
                 rid = f"river_{river_comid}"
                 river_comid += 1
                 pt_name = f"{river['name']} — Mile {k * 50 + int(t * 50)}"
 
-                coords = generate_polygon(lat, lng, rng, radius_deg=0.002)
+                coords = generate_polygon(lat, lng, rng, radius_deg=0.001)
                 feat = make_feature(coords, slugify(river['name']), pt_name, pfas, risk, so, river_comid)
                 geo_features.append(feat)
 
