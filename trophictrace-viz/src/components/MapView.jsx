@@ -158,11 +158,15 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       data: buildPlumePoints(),
     })
 
-    // Insert heatmap BELOW the first road layer so roads/buildings on land
-    // naturally render on top of it, limiting visible bleed over developed land
+    // Insert heatmap right after the water layer so ALL land layers
+    // (buildings, roads, landuse) render on top and mask any bleed
     const styleLayers = m.getStyle().layers
-    const firstRoadLayer = styleLayers.find((l) => l.id.startsWith('road-') || l.id === 'road')
-    const beforeRoadId = firstRoadLayer?.id
+    const waterIdx = styleLayers.findIndex((l) => l.id === 'water')
+    // Insert before the layer right after water — this puts heatmap between water and land
+    const insertBefore = waterIdx >= 0 && waterIdx + 1 < styleLayers.length
+      ? styleLayers[waterIdx + 1].id
+      : undefined
+    const beforeRoadId = insertBefore
 
     // ── Radiating plume blobs ───────────────────────────────────────────────
     m.addLayer({
@@ -184,12 +188,12 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
         // continuous organic blob; shrinks at high zoom where detail takes over
         'heatmap-radius': [
           'interpolate', ['linear'], ['zoom'],
-          3,  10,
-          5,  20,
-          7,  32,
-          9,  50,
-          11, 68,
-          13, 90,
+          3,  8,
+          5,  15,
+          7,  22,
+          9,  30,
+          11, 38,
+          13, 45,
         ],
         // Intensity: controls how quickly density accumulates in overlapping areas
         'heatmap-intensity': [
@@ -231,26 +235,16 @@ export default function MapView({ data, onSegmentHover, onSegmentClick, onCursor
       900, UNSAFE_COLOR,
     ]
 
+    // Centerline is hidden — heatmap does all visual work.
+    // Only the hit-area layer below is used for hover/click detection.
     m.addLayer({
       id: 'river-contamination',
       type: 'line',
       source: 'contaminated-rivers',
       paint: {
         'line-color': ZONE_COLOR,
-        'line-width': [
-          'interpolate', ['exponential', 1.5], ['zoom'],
-          4,  0.3,
-          8,  0.7,
-          12, 1.5,
-          14, 2.5,
-        ],
-        'line-opacity': [
-          'interpolate', ['linear'], ['zoom'],
-          4,  0.0,
-          7,  0.25,
-          11, 0.50,
-          14, 0.70,
-        ],
+        'line-width': 0,
+        'line-opacity': 0,
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     })
